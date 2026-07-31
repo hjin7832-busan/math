@@ -92,11 +92,8 @@ export default function Home() {
         {/* 헤더 섹션 */}
         <div className="text-center space-y-4">
           <h1 className="text-4xl lg:text-5xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-gray-900 to-gray-600 pb-2">
-            함수 그래프 그리기
+            2026학년도 2학기 수업 with HJ at DADAE High School
           </h1>
-          <p className="text-gray-500 font-medium">
-            원하는 수학 함수식을 입력하고 그래프를 확인해보세요.
-          </p>
         </div>
 
         {/* 메인 컨트롤러 (Glassmorphism) */}

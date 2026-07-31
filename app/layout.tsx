@@ -24,9 +24,14 @@ export default function RootLayout({
               BusanHYO
             </div>
             <nav className="flex items-center gap-6 text-sm font-medium text-gray-600">
-              <a href="#" className="hover:text-gray-900 transition-colors">기능</a>
-              <a href="#" className="hover:text-gray-900 transition-colors">지원</a>
+              <a href="/2026미적분1" className="hover:text-gray-900 transition-colors">2026미적분1</a>
+              <a href="/2026인간과심리" className="hover:text-gray-900 transition-colors">2026인간과심리</a>
+              <a href="/2026창체진로" className="hover:text-gray-900 transition-colors">2026창체진로</a>
             </nav>
+            <div className="ml-auto flex items-center gap-4">
+              <a href="/login" className="hover:text-gray-900 transition-colors">로그인</a>
+              <a href="/signup" className="hover:text-gray-900 transition-colors">가입</a>
+            </div>
           </div>
         </header>
 
