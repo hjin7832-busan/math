@@ -20,15 +20,15 @@ export default function RootLayout({
         {/* 상단 헤더: 애플 감성의 반투명 유리 효과 (Glassmorphism) 적용 */}
         <header className="sticky top-0 z-50 w-full backdrop-blur-md bg-white/70 border-b border-gray-200/50">
           <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-            <div className="text-xl font-semibold tracking-tighter text-gray-900">
-              BusanHYO
+            <div className="flex-1 flex justify-start text-xl font-semibold tracking-tighter text-gray-900">
+              <a href="/">BusanHYO</a>
             </div>
             <nav className="flex items-center gap-6 text-sm font-medium text-gray-600">
               <a href="/2026미적분1" className="hover:text-gray-900 transition-colors">2026미적분1</a>
               <a href="/2026인간과심리" className="hover:text-gray-900 transition-colors">2026인간과심리</a>
               <a href="/2026창체진로" className="hover:text-gray-900 transition-colors">2026창체진로</a>
             </nav>
-            <div className="ml-auto flex items-center gap-4">
+            <div className="flex-1 flex justify-end items-center gap-4 text-sm font-medium text-gray-600">
               <a href="/login" className="hover:text-gray-900 transition-colors">로그인</a>
               <a href="/signup" className="hover:text-gray-900 transition-colors">가입</a>
             </div>
