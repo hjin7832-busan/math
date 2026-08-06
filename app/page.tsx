@@ -1,180 +1,183 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Plus, Loader2 } from 'lucide-react'
-import { evaluate } from 'mathjs'
-import { supabase } from '@/lib/supabase'
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer
-} from 'recharts'
-
-type GraphData = {
-  id: string
-  created_at: string
-  expression: string
-}
+import Link from 'next/link'
+import QRCodeWidget from '@/components/QRCodeWidget'
+import MathGraphCanvas from '@/components/MathGraphCanvas'
+import { ArrowRight, BookOpen, Compass, Award, Sparkles, Brain, Code, Layers } from 'lucide-react'
 
 export default function Home() {
-  const [expression, setExpression] = useState('x^2')
-  const [dataPoints, setDataPoints] = useState<{ x: number; y: number }[]>([])
-  const [history, setHistory] = useState<GraphData[]>([])
-  const [isSaving, setIsSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  // 초기 렌더링 시 그래프 그리기 및 히스토리 불러오기
-  useEffect(() => {
-    generateData(expression)
-    fetchHistory()
-  }, [])
-
-  const fetchHistory = async () => {
-    const { data, error } = await supabase
-      .from('saved_graphs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(5)
-    
-    if (data) {
-      setHistory(data)
-    }
-  }
-
-  const generateData = (expr: string) => {
-    try {
-      setError('')
-      const points = []
-      // x: -10 to 10
-      for (let x = -10; x <= 10; x += 0.5) {
-        const y = evaluate(expr, { x })
-        points.push({ x, y })
-      }
-      setDataPoints(points)
-      return true
-    } catch (err) {
-      setError('수식이 올바르지 않습니다. (예: x^2, sin(x), 2*x + 1)')
-      return false
-    }
-  }
-
-  const handlePlotAndSave = async () => {
-    if (!expression.trim()) return
-    
-    // 1. 그래프 데이터 생성
-    const isValid = generateData(expression)
-    if (!isValid) return
-
-    // 2. Supabase 저장
-    setIsSaving(true)
-    const { error } = await supabase
-      .from('saved_graphs')
-      .insert([{ expression }])
-    
-    setIsSaving(false)
-
-    if (error) {
-      setError('저장에 실패했습니다. 데이터베이스 설정을 확인해주세요.')
-      console.error(error)
-    } else {
-      fetchHistory()
-    }
-  }
-
   return (
-    <main className="flex min-h-screen flex-col items-center py-12 px-6 lg:px-24">
-      <div className="max-w-4xl w-full space-y-12 flex flex-col items-center">
+    <main className="flex-1 flex flex-col items-center py-8 px-4 sm:px-6 lg:px-12 space-y-16 max-w-7xl mx-auto w-full">
+      
+      {/* HERO SECTION */}
+      <section className="w-full flex flex-col lg:flex-row items-center justify-between gap-10 pt-4 pb-6">
         
-        {/* 헤더 섹션 */}
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl lg:text-5xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-gray-900 to-gray-600 pb-2">
-            2026학년도 2학기 수업 with HJ at DADAE High School
-          </h1>
-        </div>
+        {/* Left Hero Title & CTA */}
+        <div className="flex-1 space-y-6 text-center lg:text-left">
+          
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <span>수학적 통찰과 재미를 나누는 공간</span>
+          </div>
 
-        {/* 메인 컨트롤러 (Glassmorphism) */}
-        <div className="w-full max-w-2xl bg-white/60 backdrop-blur-xl border border-white/40 shadow-xl rounded-3xl p-8 space-y-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                함수식 (y = )
-              </label>
-              <input 
-                type="text"
-                value={expression}
-                onChange={(e) => setExpression(e.target.value)}
-                placeholder="예: x^2 + 2*x - 1"
-                className="w-full px-5 py-4 rounded-2xl bg-white border border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition-all outline-none text-lg font-medium text-gray-800"
-                onKeyDown={(e) => e.key === 'Enter' && handlePlotAndSave()}
-              />
+          <div className="space-y-3">
+            <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white leading-none">
+              <span className="bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent">
+                수학공부 HYO
+              </span>
+            </h1>
+            <p className="text-lg sm:text-xl font-medium text-slate-300 max-w-2xl">
+              아름다운 함수 그래프 시각화부터 미적분 개념 게임까지, <br className="hidden sm:inline" />
+              수학을 눈으로 확인하고 직관적으로 탐구하세요.
+            </p>
+          </div>
+
+          {/* Quick Action Navigation Buttons */}
+          <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
+            <Link
+              href="/2026미적분1"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 active:scale-[0.98] transition-all"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>2026미적분1 바로가기</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+
+            <a
+              href="#interactive-graph"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 font-semibold text-sm transition-all"
+            >
+              <Compass className="w-4 h-4 text-cyan-400" />
+              <span>함수 시각화 탐구</span>
+            </a>
+          </div>
+
+          {/* Key Feature Stats */}
+          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-800/80 max-w-lg mx-auto lg:mx-0">
+            <div>
+              <div className="text-xl font-bold text-white">Interactive</div>
+              <div className="text-xs text-slate-400">실시간 그래프 시각화</div>
             </div>
-            <div className="flex items-end">
-              <button 
-                onClick={handlePlotAndSave}
-                disabled={isSaving}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-gray-900 text-white rounded-2xl font-semibold hover:bg-gray-800 hover:shadow-lg transition-all duration-300 disabled:opacity-70"
-              >
-                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                <span>그리기 & 저장</span>
-              </button>
+            <div>
+              <div className="text-xl font-bold text-cyan-300">2026</div>
+              <div className="text-xs text-slate-400">미적분1 과정 연동</div>
+            </div>
+            <div>
+              <div className="text-xl font-bold text-emerald-400">Daily Reset</div>
+              <div className="text-xs text-slate-400">자정 리더보드 리셋</div>
             </div>
           </div>
-          {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
         </div>
 
-        {/* 그래프 렌더링 영역 */}
-        <div className="w-full h-[400px] bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={dataPoints} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="x" type="number" domain={['dataMin', 'dataMax']} tick={{ fill: '#888' }} />
-              <YAxis tick={{ fill: '#888' }} />
-              <Tooltip 
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="y" 
-                stroke="#111827" 
-                strokeWidth={3}
-                dot={false}
-                activeDot={{ r: 6, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+        {/* Right QR Code Widget */}
+        <div className="w-full max-w-md shrink-0">
+          <QRCodeWidget />
         </div>
 
-        {/* 최근 저장된 그래프 내역 */}
-        <div className="w-full max-w-2xl text-left space-y-4">
-          <h3 className="text-xl font-bold tracking-tight text-gray-900">최근 저장된 식</h3>
-          {history.length === 0 ? (
-            <p className="text-gray-500 text-sm">저장된 내역이 없습니다.</p>
-          ) : (
-            <div className="grid gap-3">
-              {history.map((item) => (
-                <div 
-                  key={item.id} 
-                  className="flex items-center justify-between p-4 bg-white rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:border-blue-300 hover:shadow-md transition-all"
-                  onClick={() => {
-                    setExpression(item.expression)
-                    generateData(item.expression)
-                  }}
-                >
-                  <span className="font-semibold text-gray-800 text-lg">y = {item.expression}</span>
-                  <span className="text-sm text-gray-400">
-                    {new Date(item.created_at).toLocaleString('ko-KR')}
-                  </span>
-                </div>
-              ))}
+      </section>
+
+      {/* SECTION 2: INTERACTIVE FUNCTION GRAPH VISUALIZER */}
+      <section id="interactive-graph" className="w-full flex flex-col items-center space-y-6 pt-4 scroll-mt-24">
+        <div className="text-center space-y-2 max-w-2xl">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
+            <span>🎨 인터랙티브 수학 함수 시각화</span>
+          </h2>
+          <p className="text-sm text-slate-400">
+            버튼을 눌러 다채로운 수식을 랜덤으로 그리거나 자신만의 수식을 직접 테스트해 보세요.
+          </p>
+        </div>
+
+        {/* Math Graph Canvas Component */}
+        <MathGraphCanvas />
+      </section>
+
+      {/* SECTION 3: COURSE & GAME HIGHLIGHT CARDS */}
+      <section className="w-full pt-8 space-y-8">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+            📚 탐구 강좌 & 수학 게임 하이라이트
+          </h2>
+          <p className="text-sm text-slate-400">
+            회원가입 없이 숫자 이름(학번/PIN)만으로 간편하게 게임을 즐기고 기록을 남기세요.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* Card 1: 2026 Calculus 1 */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 hover:border-indigo-500/50 transition-all group flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-lg border border-indigo-500/30">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <div className="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300">
+                ACTIVE COURSE
+              </div>
+              <h3 className="text-xl font-bold text-white group-hover:text-indigo-300 transition-colors">
+                2026미적분1
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                미적분의 기초 개념부터 극값, 적분 넓이, 미분계수 순발력 퀴즈까지 연계된 수학 탐구 공간입니다.
+              </p>
             </div>
-          )}
-        </div>
+            <Link
+              href="/2026미적분1"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white font-semibold text-xs border border-indigo-500/30 transition-all"
+            >
+              <span>강좌 및 게임 이동</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
 
-      </div>
+          {/* Card 2: Numeric Registration */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 hover:border-cyan-500/50 transition-all group flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-lg border border-cyan-500/30">
+                <Brain className="w-6 h-6" />
+              </div>
+              <div className="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-cyan-500/20 text-cyan-300">
+                NO SIGNUP NEEDED
+              </div>
+              <h3 className="text-xl font-bold text-white group-hover:text-cyan-300 transition-colors">
+                숫자 이름(학번/PIN) 참가
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                번거로운 회원가입 없이 4~5자리 숫자로 이루어진 나만의 전용 식별 번호로 챌린지에 도전하세요.
+              </p>
+            </div>
+            <div className="px-4 py-2.5 rounded-xl bg-slate-950 text-xs text-slate-400 border border-slate-800 font-mono text-center">
+              예: 学番 20301 / PIN 1234
+            </div>
+          </div>
+
+          {/* Card 3: Midnight Hall of Fame */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 hover:border-amber-500/50 transition-all group flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg border border-amber-500/30">
+                <Award className="w-6 h-6" />
+              </div>
+              <div className="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300">
+                AUTOMATIC RESET
+              </div>
+              <h3 className="text-xl font-bold text-white group-hover:text-amber-300 transition-colors">
+                자정 리셋 & 명예의 전당
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                매일 자정(00:00)에 순위가 자동 초기화되며, 전날의 1위 기록은 날짜와 함께 '명예의 전당'에 영구 보존됩니다.
+              </p>
+            </div>
+            <Link
+              href="/2026미적분1?tab=hof"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-amber-500/10 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-semibold text-xs border border-amber-500/30 transition-all"
+            >
+              <span>명예의 전당 보기</span>
+              <Award className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+        </div>
+      </section>
+
     </main>
   )
 }
