@@ -1,20 +1,13 @@
 export interface NavItem {
   title: string
   href: string
-  isHot?: boolean
   badge?: string
-  subItems?: { title: string; href: string }[]
 }
 
-// Extensible Navigation Structure (배열 기반 확장 네비게이션)
+// ── 확장형 네비게이션 배열 ────────────────────────────────────────
+// 추후 2027미적분1, 2028미적분1 등 한 줄 추가로 메뉴 확장 가능
 export const NAVIGATION_ITEMS: NavItem[] = [
-  {
-    title: '2026미적분1',
-    href: '/2026미적분1',
-    isHot: true,
-    badge: 'NEW',
-  },
-  // Future year items can be uncommented or added here easily:
+  { title: '2026미적분1', href: '/2026미적분1' },
   // { title: '2027미적분1', href: '/2027미적분1' },
   // { title: '2028미적분1', href: '/2028미적분1' },
 ]

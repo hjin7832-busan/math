@@ -3,7 +3,16 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-gray-50 text-gray-900 tracking-tight;
+  html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
+  body {
+    @apply bg-white text-gray-900;
+  }
+}
+
+/* 그래프 캔버스 애니메이션 */
+@keyframes drawLine {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
 }

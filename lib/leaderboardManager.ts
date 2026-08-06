@@ -1,5 +1,10 @@
-// Leaderboard Manager for 수학공부 HYO
-// Handles daily leaderboard, midnight auto-reset, Hall of Fame, and duplicate numeric name checks.
+// ─────────────────────────────────────────────────────────────────
+// Leaderboard Manager — 수학공부HYO
+//
+// 규칙:
+//  · 오늘 리더보드: 당일 게임 기록 (자정마다 리셋)
+//  · 명예의 전당  : 매일 자정 전날 1등 → HOF 저장 (7일 후 자동 삭제)
+// ─────────────────────────────────────────────────────────────────
 
 export interface LeaderboardEntry {
   id: string
@@ -7,209 +12,158 @@ export interface LeaderboardEntry {
   score: number
   correctCount: number
   maxCombo: number
-  date: string // YYYY-MM-DD
-  createdAt: string
+  date: string        // YYYY-MM-DD
+  createdAt: string   // ISO string
 }
 
 export interface HallOfFameEntry {
   id: string
-  date: string // YYYY-MM-DD (e.g., 2026-08-05)
+  date: string        // YYYY-MM-DD
   numericName: string
   score: number
   correctCount: number
   maxCombo: number
+  savedAt: string     // ISO string — HOF 등재 시각 (7일 만료 기준)
 }
 
-const STORAGE_KEYS = {
-  TODAY_LEADERBOARD: 'hyo_today_leaderboard_v1',
-  HALL_OF_FAME: 'hyo_hall_of_fame_v1',
-  LAST_RESET_DATE: 'hyo_last_reset_date_v1',
+const KEY = {
+  TODAY: 'hyo_today_v2',
+  HOF:   'hyo_hof_v2',
+  LAST:  'hyo_last_date_v2',
 }
 
-// Utility to get today's date string YYYY-MM-DD in local time
-export function getTodayDateString(): string {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+const HOF_MAX_DAYS = 7 // 주간 리셋: 7일 이후 HOF 레코드 삭제
+
+// ── 유틸 ──────────────────────────────────────────────────────────
+export function todayStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// Validate if input consists strictly of numbers (학번 5자리 or PIN 번호 등)
-export function validateNumericName(input: string): { valid: boolean; message?: string } {
-  const trimmed = input.trim()
-  if (!trimmed) {
-    return { valid: false, message: '숫자로 된 이름을 입력해 주세요.' }
+function readJSON<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as T) : fallback
+  } catch {
+    return fallback
   }
-  if (!/^\d+$/.test(trimmed)) {
-    return { valid: false, message: '문자나 특수문자는 입력할 수 없습니다. 오직 숫자로만 입력해 주세요! (예: 20301)' }
-  }
-  if (trimmed.length < 2 || trimmed.length > 10) {
-    return { valid: false, message: '숫자 이름은 2자리 ~ 10자리 사이여야 합니다.' }
-  }
-  return { valid: true }
 }
 
-// Check if midnight auto-reset should take place
-export function checkAndResetDailyLeaderboard(): void {
+function writeJSON<T>(key: string, val: T): void {
   if (typeof window === 'undefined') return
+  localStorage.setItem(key, JSON.stringify(val))
+}
 
-  const today = getTodayDateString()
-  const lastResetDate = localStorage.getItem(STORAGE_KEYS.LAST_RESET_DATE)
+// ── 숫자 이름 검증 ────────────────────────────────────────────────
+export function validateNumericName(input: string): { ok: boolean; msg?: string } {
+  const s = input.trim()
+  if (!s) return { ok: false, msg: '숫자 이름을 입력해 주세요.' }
+  if (!/^\d+$/.test(s)) return { ok: false, msg: '숫자만 입력할 수 있습니다. (예: 20301)' }
+  if (s.length < 2 || s.length > 10) return { ok: false, msg: '2~10자리 숫자로 입력해 주세요.' }
+  return { ok: true }
+}
 
-  if (!lastResetDate) {
-    // Initial run
-    localStorage.setItem(STORAGE_KEYS.LAST_RESET_DATE, today)
+// ── 자정 리셋 (호출할 때마다 자동 검사) ──────────────────────────
+export function checkMidnightReset(): void {
+  if (typeof window === 'undefined') return
+  const today = todayStr()
+  const last = localStorage.getItem(KEY.LAST)
+
+  if (!last) {
+    writeJSON(KEY.TODAY, [])
+    localStorage.setItem(KEY.LAST, today)
     return
   }
 
-  // If date has passed midnight (different YYYY-MM-DD)
-  if (lastResetDate !== today) {
-    const rawTodayList = localStorage.getItem(STORAGE_KEYS.TODAY_LEADERBOARD)
-    if (rawTodayList) {
-      try {
-        const todayEntries: LeaderboardEntry[] = JSON.parse(rawTodayList)
-        if (todayEntries.length > 0) {
-          // Sort descending by score
-          todayEntries.sort((a, b) => b.score - a.score || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-          const winner = todayEntries[0]
+  if (last !== today) {
+    // 전날 1등 → HOF
+    const todayList = readJSON<LeaderboardEntry[]>(KEY.TODAY, [])
+    if (todayList.length > 0) {
+      todayList.sort((a, b) => b.score - a.score)
+      const winner = todayList[0]
+      const hof = readJSON<HallOfFameEntry[]>(KEY.HOF, [])
 
-          // Save #1 winner to Hall of Fame
-          const rawHof = localStorage.getItem(STORAGE_KEYS.HALL_OF_FAME)
-          const hof: HallOfFameEntry[] = rawHof ? JSON.parse(rawHof) : []
-          
-          // Avoid duplicate entry for the same date in HOF
-          const existingWinnerIdx = hof.findIndex((h) => h.date === lastResetDate)
-          const newHofEntry: HallOfFameEntry = {
-            id: winner.id,
-            date: lastResetDate,
-            numericName: winner.numericName,
-            score: winner.score,
-            correctCount: winner.correctCount,
-            maxCombo: winner.maxCombo,
-          }
+      // 주간 만료 레코드 제거 (7일 초과)
+      const cutoff = Date.now() - HOF_MAX_DAYS * 24 * 60 * 60 * 1000
+      const fresh = hof.filter(h => new Date(h.savedAt).getTime() > cutoff)
 
-          if (existingWinnerIdx >= 0) {
-            hof[existingWinnerIdx] = newHofEntry
-          } else {
-            hof.unshift(newHofEntry) // Add newest at top
-          }
-
-          localStorage.setItem(STORAGE_KEYS.HALL_OF_FAME, JSON.stringify(hof))
-        }
-      } catch (e) {
-        console.error('Error processing midnight reset:', e)
+      // 중복 방지
+      const alreadyExists = fresh.some(h => h.date === last)
+      if (!alreadyExists) {
+        fresh.unshift({
+          id: winner.id,
+          date: last,
+          numericName: winner.numericName,
+          score: winner.score,
+          correctCount: winner.correctCount,
+          maxCombo: winner.maxCombo,
+          savedAt: new Date().toISOString(),
+        })
       }
+      writeJSON(KEY.HOF, fresh)
     }
 
-    // Reset Today's Leaderboard for the new day
-    localStorage.setItem(STORAGE_KEYS.TODAY_LEADERBOARD, JSON.stringify([]))
-    localStorage.setItem(STORAGE_KEYS.LAST_RESET_DATE, today)
+    // 오늘 리더보드 리셋
+    writeJSON(KEY.TODAY, [])
+    localStorage.setItem(KEY.LAST, today)
   }
 }
 
-// Check if numeric name is already registered today
-export function isDuplicateNumericName(numericName: string): boolean {
-  if (typeof window === 'undefined') return false
-  checkAndResetDailyLeaderboard()
-
-  const entries = getTodayLeaderboard()
-  return entries.some((item) => item.numericName.trim() === numericName.trim())
+// ── 중복 확인 ─────────────────────────────────────────────────────
+export function isDuplicate(numericName: string): boolean {
+  checkMidnightReset()
+  const list = readJSON<LeaderboardEntry[]>(KEY.TODAY, [])
+  return list.some(e => e.numericName === numericName.trim())
 }
 
-// Get today's leaderboard sorted by score descending
+// ── 오늘 리더보드 ─────────────────────────────────────────────────
 export function getTodayLeaderboard(): LeaderboardEntry[] {
-  if (typeof window === 'undefined') return []
-  checkAndResetDailyLeaderboard()
-
-  const raw = localStorage.getItem(STORAGE_KEYS.TODAY_LEADERBOARD)
-  if (!raw) return []
-  try {
-    const list: LeaderboardEntry[] = JSON.parse(raw)
-    return list.sort((a, b) => b.score - a.score || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-  } catch (e) {
-    return []
-  }
+  checkMidnightReset()
+  const list = readJSON<LeaderboardEntry[]>(KEY.TODAY, [])
+  return [...list].sort((a, b) => b.score - a.score)
 }
 
-// Get Hall of Fame records
+// ── 명예의 전당 (HOF) ─────────────────────────────────────────────
 export function getHallOfFame(): HallOfFameEntry[] {
-  if (typeof window === 'undefined') return []
-  checkAndResetDailyLeaderboard()
-
-  const raw = localStorage.getItem(STORAGE_KEYS.HALL_OF_FAME)
-  if (!raw) return []
-  try {
-    const list: HallOfFameEntry[] = JSON.parse(raw)
-    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  } catch (e) {
-    return []
-  }
+  checkMidnightReset()
+  const hof = readJSON<HallOfFameEntry[]>(KEY.HOF, [])
+  // 주간 만료 제거 후 반환
+  const cutoff = Date.now() - HOF_MAX_DAYS * 24 * 60 * 60 * 1000
+  return hof.filter(h => new Date(h.savedAt).getTime() > cutoff)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 }
 
-// Submit a new game score
-export function submitGameScore(payload: {
+// ── 점수 등록 ─────────────────────────────────────────────────────
+export function submitScore(payload: {
   numericName: string
   score: number
   correctCount: number
   maxCombo: number
-}): { success: boolean; message?: string; entry?: LeaderboardEntry } {
-  if (typeof window === 'undefined') return { success: false, message: '클라이언트 환경이 아닙니다.' }
+}): { ok: boolean; msg?: string; entry?: LeaderboardEntry } {
+  if (typeof window === 'undefined') return { ok: false, msg: '서버 환경에서는 사용할 수 없습니다.' }
+  checkMidnightReset()
 
-  checkAndResetDailyLeaderboard()
+  const v = validateNumericName(payload.numericName)
+  if (!v.ok) return { ok: false, msg: v.msg }
 
-  const validation = validateNumericName(payload.numericName)
-  if (!validation.valid) {
-    return { success: false, message: validation.message }
+  if (isDuplicate(payload.numericName)) {
+    return { ok: false, msg: `[${payload.numericName}]은 오늘 이미 등록된 숫자 이름입니다.` }
   }
 
-  if (isDuplicateNumericName(payload.numericName)) {
-    return {
-      success: false,
-      message: `숫자 이름 [${payload.numericName}]은(는) 이미 오늘 순위에 등록되어 있습니다! 중복 입력을 방지하기 위해 다른 숫자 이름을 사용해 주세요.`,
-    }
-  }
-
-  const today = getTodayDateString()
-  const newEntry: LeaderboardEntry = {
-    id: `entry_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+  const entry: LeaderboardEntry = {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     numericName: payload.numericName.trim(),
     score: payload.score,
     correctCount: payload.correctCount,
     maxCombo: payload.maxCombo,
-    date: today,
+    date: todayStr(),
     createdAt: new Date().toISOString(),
   }
 
-  const currentList = getTodayLeaderboard()
-  currentList.push(newEntry)
-  localStorage.setItem(STORAGE_KEYS.TODAY_LEADERBOARD, JSON.stringify(currentList))
+  const list = readJSON<LeaderboardEntry[]>(KEY.TODAY, [])
+  list.push(entry)
+  writeJSON(KEY.TODAY, list)
 
-  return { success: true, entry: newEntry }
-}
-
-// Utility mock data generator for initial demonstration if empty
-export function seedSampleDataIfEmpty(): void {
-  if (typeof window === 'undefined') return
-  const today = getTodayDateString()
-  const current = getTodayLeaderboard()
-  
-  if (current.length === 0) {
-    const sampleToday: LeaderboardEntry[] = [
-      { id: 'sample_1', numericName: '20301', score: 1480, correctCount: 22, maxCombo: 12, date: today, createdAt: new Date(Date.now() - 3600000).toISOString() },
-      { id: 'sample_2', numericName: '20412', score: 1250, correctCount: 18, maxCombo: 8, date: today, createdAt: new Date(Date.now() - 7200000).toISOString() },
-      { id: 'sample_3', numericName: '10105', score: 980, correctCount: 14, maxCombo: 5, date: today, createdAt: new Date(Date.now() - 10800000).toISOString() },
-    ]
-    localStorage.setItem(STORAGE_KEYS.TODAY_LEADERBOARD, JSON.stringify(sampleToday))
-  }
-
-  const rawHof = localStorage.getItem(STORAGE_KEYS.HALL_OF_FAME)
-  if (!rawHof || JSON.parse(rawHof).length === 0) {
-    const sampleHof: HallOfFameEntry[] = [
-      { id: 'hof_1', date: '2026-08-05', numericName: '20315', score: 1650, correctCount: 25, maxCombo: 15 },
-      { id: 'hof_2', date: '2026-08-04', numericName: '20108', score: 1520, correctCount: 23, maxCombo: 11 },
-      { id: 'hof_3', date: '2026-08-03', numericName: '10220', score: 1390, correctCount: 20, maxCombo: 9 },
-    ]
-    localStorage.setItem(STORAGE_KEYS.HALL_OF_FAME, JSON.stringify(sampleHof))
-  }
+  return { ok: true, entry }
 }

@@ -1,478 +1,264 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import { evaluate } from 'mathjs'
-import { Sparkles, Play, Pause, RefreshCw, Info, Sliders, CheckCircle2 } from 'lucide-react'
 
-export interface MathFunctionItem {
-  id: string
+// ── 수학 함수 프리셋 ──────────────────────────────────────────────
+type FnType = 'cartesian' | 'parametric' | 'polar'
+
+interface MathFn {
   name: string
-  formulaDisplay: string
-  type: 'cartesian' | 'parametric' | 'polar'
-  expr?: string // for mathjs cartesian
-  parametricFunc?: (t: number) => { x: number; y: number }
-  polarFunc?: (theta: number) => number
-  description: string
-  domain: [number, number] // [min, max]
-  scaleX?: number
-  scaleY?: number
+  formula: string
+  type: FnType
+  domain: [number, number]
+  cartesian?: (x: number) => number
+  parametric?: (t: number) => { x: number; y: number }
+  polar?: (theta: number) => number
 }
 
-const MATH_PRESETS: MathFunctionItem[] = [
+const PRESETS: MathFn[] = [
   {
-    id: 'sin_x',
-    name: '진동 증폭 함수',
-    formulaDisplay: 'y = sin(x) · x',
-    type: 'cartesian',
-    expr: 'sin(x) * x',
-    description: 'x의 원점 진폭이 증가하며 조화롭게 진동하는 다이나믹 함수',
-    domain: [-4 * Math.PI, 4 * Math.PI],
-  },
-  {
-    id: 'cubic_poly',
-    name: '3차 극값 함수',
-    formulaDisplay: 'y = x³ - 3x',
-    type: 'cartesian',
-    expr: 'x^3 - 3*x',
-    description: 'x = -1에서 극댓값 2, x = 1에서 극솟값 -2를 갖는 3차 함수의 대표 수식',
-    domain: [-2.5, 2.5],
-  },
-  {
-    id: 'heart_curve',
-    name: '하트 방정식 (Heart Curve)',
-    formulaDisplay: 'x(t) = 16 sin³(t), y(t) = 13 cos(t) - 5 cos(2t) - 2 cos(3t) - cos(4t)',
+    name: '하트 곡선',
+    formula: 'x(t)=16sin³t, y(t)=13cost−5cos2t−2cos3t−cos4t',
     type: 'parametric',
-    parametricFunc: (t: number) => {
-      const x = 16 * Math.pow(Math.sin(t), 3)
-      const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)
-      return { x: x / 16, y: y / 16 }
-    },
-    description: '매개변수 t를 활용해 완성되는 수학적 정교함의 상징, 로맨틱 하트 방정식',
     domain: [0, 2 * Math.PI],
-  },
-  {
-    id: 'rose_curve',
-    name: '8엽 장미 곡선 (Rose Curve)',
-    formulaDisplay: 'r = cos(4θ)',
-    type: 'polar',
-    polarFunc: (theta: number) => Math.cos(4 * theta),
-    description: '극방정식 극좌표계 상에서 8개의 대칭적인 꽃잎을 그리는 아름다운 장미 곡선',
-    domain: [0, 2 * Math.PI],
-  },
-  {
-    id: 'damped_sine',
-    name: '감쇠 파동 함수 (Damped Sine Wave)',
-    formulaDisplay: 'y = e^(-0.15x) · sin(3x)',
-    type: 'cartesian',
-    expr: 'e^(-0.15*x) * sin(3*x)',
-    description: '물리학과 공학에서 파동의 에너지가 시간에 따라 감소하는 현상을 나타내는 함수',
-    domain: [-1, 4 * Math.PI],
-  },
-  {
-    id: 'lissajous',
-    name: '리사주 조화 곡선 (Lissajous 3:4)',
-    formulaDisplay: 'x(t) = sin(3t), y(t) = sin(4t)',
-    type: 'parametric',
-    parametricFunc: (t: number) => ({
-      x: Math.sin(3 * t),
-      y: Math.sin(4 * t),
+    parametric: (t) => ({
+      x: 16 * Math.pow(Math.sin(t), 3),
+      y: 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t),
     }),
-    description: '두 직교하는 진동 수의 비율이 3:4일 때 형성되는 복합 파형 궤적',
-    domain: [0, 2 * Math.PI],
   },
   {
-    id: 'butterfly',
-    name: '나비 곡선 (Butterfly Curve)',
-    formulaDisplay: 'r = e^(sin θ) - 2 cos(4θ) + sin⁵((2θ - π)/24)',
+    name: '8엽 장미 곡선',
+    formula: 'r = cos(4θ)',
     type: 'polar',
-    polarFunc: (theta: number) => {
-      return Math.exp(Math.sin(theta)) - 2 * Math.cos(4 * theta) + Math.pow(Math.sin((2 * theta - Math.PI) / 24), 5)
-    },
-    description: '템플 페이(Temple H. Fay)에 의해 발견된 우아한 나비 모양의 극곡선',
-    domain: [0, 12 * Math.PI],
+    domain: [0, 2 * Math.PI],
+    polar: (theta) => Math.cos(4 * theta),
   },
   {
-    id: 'sinc_wave',
-    name: '수학적 싱크 변형 (Sinc Wave)',
-    formulaDisplay: 'y = sin(2x) / (1 + 0.1x²)',
+    name: '감쇠 사인파',
+    formula: 'y = e^(−0.15x) · sin(3x)',
     type: 'cartesian',
-    expr: 'sin(2*x) / (1 + 0.1*x^2)',
-    description: '신호 처리 및 신호 복원에 핵심적으로 응용되는 감쇠 샌드위치 수식',
+    domain: [-1, 4 * Math.PI],
+    cartesian: (x) => Math.exp(-0.15 * x) * Math.sin(3 * x),
+  },
+  {
+    name: '리사주 3:4',
+    formula: 'x(t)=sin3t, y(t)=sin4t',
+    type: 'parametric',
+    domain: [0, 2 * Math.PI],
+    parametric: (t) => ({ x: Math.sin(3 * t), y: Math.sin(4 * t) }),
+  },
+  {
+    name: '나비 곡선',
+    formula: 'r = e^sinθ − 2cos4θ + sin⁵((2θ−π)/24)',
+    type: 'polar',
+    domain: [0, 12 * Math.PI],
+    polar: (theta) =>
+      Math.exp(Math.sin(theta)) -
+      2 * Math.cos(4 * theta) +
+      Math.pow(Math.sin((2 * theta - Math.PI) / 24), 5),
+  },
+  {
+    name: '3차 극값 함수',
+    formula: 'y = x³ − 3x',
+    type: 'cartesian',
+    domain: [-2.5, 2.5],
+    cartesian: (x) => x * x * x - 3 * x,
+  },
+  {
+    name: '진동 증폭',
+    formula: 'y = sin(x) · x',
+    type: 'cartesian',
     domain: [-4 * Math.PI, 4 * Math.PI],
+    cartesian: (x) => Math.sin(x) * x,
+  },
+  {
+    name: '싱크 변형',
+    formula: 'y = sin(2x) / (1 + 0.1x²)',
+    type: 'cartesian',
+    domain: [-4 * Math.PI, 4 * Math.PI],
+    cartesian: (x) => Math.sin(2 * x) / (1 + 0.1 * x * x),
   },
 ]
 
-export default function MathGraphCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [selectedFunc, setSelectedFunc] = useState<MathFunctionItem>(MATH_PRESETS[0])
-  const [customExpr, setCustomExpr] = useState('')
-  const [isCustomMode, setIsCustomMode] = useState(false)
-  const [customError, setCustomError] = useState('')
-  const [isPlaying, setIsPlaying] = useState(true)
-  const [progress, setProgress] = useState(1.0)
-  const animationRef = useRef<number | null>(null)
+// ── 색상 팔레트 ───────────────────────────────────────────────────
+const COLORS = [
+  '#e11d48', '#7c3aed', '#0ea5e9', '#059669', '#d97706', '#db2777'
+]
 
-  // Random function selection
-  const handleRandomSelect = () => {
-    setIsCustomMode(false)
-    setCustomError('')
-    let nextIndex = Math.floor(Math.random() * MATH_PRESETS.length)
-    if (MATH_PRESETS[nextIndex].id === selectedFunc.id) {
-      nextIndex = (nextIndex + 1) % MATH_PRESETS.length
+function computePoints(fn: MathFn): { x: number; y: number }[] {
+  const N = 600
+  const [min, max] = fn.domain
+  const step = (max - min) / N
+  const pts: { x: number; y: number }[] = []
+
+  if (fn.type === 'cartesian' && fn.cartesian) {
+    for (let i = 0; i <= N; i++) {
+      const xv = min + i * step
+      const yv = fn.cartesian(xv)
+      if (isFinite(yv)) pts.push({ x: xv, y: yv })
     }
-    const nextFunc = MATH_PRESETS[nextIndex]
-    setSelectedFunc(nextFunc)
-    triggerAnimation()
+  } else if (fn.type === 'parametric' && fn.parametric) {
+    for (let i = 0; i <= N; i++) {
+      const t = min + i * step
+      pts.push(fn.parametric(t))
+    }
+  } else if (fn.type === 'polar' && fn.polar) {
+    for (let i = 0; i <= N; i++) {
+      const theta = min + i * step
+      const r = fn.polar(theta)
+      pts.push({ x: r * Math.cos(theta), y: r * Math.sin(theta) })
+    }
   }
+  return pts
+}
 
-  // Trigger drawing animation from 0 to 1
-  const triggerAnimation = useCallback(() => {
-    setProgress(0)
-    setIsPlaying(true)
-  }, [])
+export default function GraphWidget() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const rafRef = useRef<number | null>(null)
+  const [current, setCurrent] = useState<MathFn | null>(null)
+  const [color, setColor] = useState(COLORS[0])
+  const colorIdx = useRef(0)
 
-  // Canvas drawing loop
-  useEffect(() => {
+  const draw = useCallback((fn: MathFn, clr: string) => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Handle high DPI crisp drawing
     const dpr = window.devicePixelRatio || 1
     const rect = canvas.getBoundingClientRect()
     canvas.width = rect.width * dpr
     canvas.height = rect.height * dpr
     ctx.scale(dpr, dpr)
 
-    const width = rect.width
-    const height = rect.height
-    const centerX = width / 2
-    const centerY = height / 2
+    const W = rect.width
+    const H = rect.height
 
-    // Clear background
-    ctx.clearRect(0, 0, width, height)
-    ctx.fillStyle = '#090d16' // dark math slate
-    ctx.fillRect(0, 0, width, height)
+    const pts = computePoints(fn)
+    if (pts.length === 0) return
 
-    // Draw Grid Lines & Axes
+    // 자동 스케일
+    const xs = pts.map(p => p.x)
+    const ys = pts.map(p => p.y)
+    const xMin = Math.min(...xs), xMax = Math.max(...xs)
+    const yMin = Math.min(...ys), yMax = Math.max(...ys)
+    const pad = 32
+
+    const scaleX = (v: number) => pad + ((v - xMin) / (xMax - xMin)) * (W - 2 * pad)
+    const scaleY = (v: number) => H - pad - ((v - yMin) / (yMax - yMin)) * (H - 2 * pad)
+
+    // 배경 클리어
+    ctx.clearRect(0, 0, W, H)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, W, H)
+
+    // 격자 (아주 옅게)
+    ctx.strokeStyle = '#f3f4f6'
     ctx.lineWidth = 1
-    ctx.strokeStyle = '#1e293b' // grid line
-    const gridSize = 40
-
-    for (let x = centerX % gridSize; x < width; x += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, height)
-      ctx.stroke()
-    }
-    for (let y = centerY % gridSize; y < height; y += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(width, y)
-      ctx.stroke()
+    const gridN = 6
+    for (let i = 0; i <= gridN; i++) {
+      const gx = pad + (i / gridN) * (W - 2 * pad)
+      const gy = pad + (i / gridN) * (H - 2 * pad)
+      ctx.beginPath(); ctx.moveTo(gx, pad); ctx.lineTo(gx, H - pad); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(pad, gy); ctx.lineTo(W - pad, gy); ctx.stroke()
     }
 
-    // Axes
-    ctx.strokeStyle = '#475569'
-    ctx.lineWidth = 1.5
+    // 애니메이션 드로잉
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
 
-    // X Axis
-    ctx.beginPath()
-    ctx.moveTo(0, centerY)
-    ctx.lineTo(width, centerY)
-    ctx.stroke()
+    let progress = 0
+    const duration = 1200 // ms
+    let startTime: number | null = null
 
-    // Y Axis
-    ctx.beginPath()
-    ctx.moveTo(centerX, 0)
-    ctx.lineTo(centerX, height)
-    ctx.stroke()
+    const animate = (ts: number) => {
+      if (!startTime) startTime = ts
+      progress = Math.min((ts - startTime) / duration, 1)
 
-    // Axis Labels & Origin
-    ctx.fillStyle = '#64748b'
-    ctx.font = '11px monospace'
-    ctx.fillText('(0,0)', centerX + 6, centerY + 16)
-    ctx.fillText('X', width - 16, centerY - 8)
-    ctx.fillText('Y', centerX + 8, 16)
+      ctx.clearRect(0, 0, W, H)
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, W, H)
 
-    // Calculate sample points
-    const points: { x: number; y: number }[] = []
-    const numSteps = 400
-
-    if (isCustomMode) {
-      // Evaluate custom expression
-      const minX = -10
-      const maxX = 10
-      const step = (maxX - minX) / numSteps
-      const scale = width / 24
-
-      for (let i = 0; i <= numSteps; i++) {
-        const xVal = minX + i * step
-        try {
-          const yVal = evaluate(customExpr, { x: xVal })
-          if (typeof yVal === 'number' && !isNaN(yVal) && isFinite(yVal)) {
-            const canvasX = centerX + xVal * scale
-            const canvasY = centerY - yVal * scale
-            points.push({ x: canvasX, y: canvasY })
-          }
-        } catch (e) {
-          // ignore individual point errors
-        }
+      // 격자 재그림
+      ctx.strokeStyle = '#f3f4f6'
+      ctx.lineWidth = 1
+      for (let i = 0; i <= gridN; i++) {
+        const gx = pad + (i / gridN) * (W - 2 * pad)
+        const gy = pad + (i / gridN) * (H - 2 * pad)
+        ctx.beginPath(); ctx.moveTo(gx, pad); ctx.lineTo(gx, H - pad); ctx.stroke()
+        ctx.beginPath(); ctx.moveTo(pad, gy); ctx.lineTo(W - pad, gy); ctx.stroke()
       }
-    } else {
-      const [minVal, maxVal] = selectedFunc.domain
-      const step = (maxVal - minVal) / numSteps
 
-      if (selectedFunc.type === 'cartesian' && selectedFunc.expr) {
-        const scale = width / (maxVal - minVal) * 0.85
-        for (let i = 0; i <= numSteps; i++) {
-          const xVal = minVal + i * step
-          try {
-            const yVal = evaluate(selectedFunc.expr, { x: xVal })
-            if (typeof yVal === 'number' && !isNaN(yVal) && isFinite(yVal)) {
-              const canvasX = centerX + xVal * scale
-              const canvasY = centerY - yVal * scale
-              points.push({ x: canvasX, y: canvasY })
-            }
-          } catch (e) {}
-        }
-      } else if (selectedFunc.type === 'parametric' && selectedFunc.parametricFunc) {
-        const scale = Math.min(width, height) * 0.35
-        for (let i = 0; i <= numSteps; i++) {
-          const t = minVal + i * step
-          const pt = selectedFunc.parametricFunc(t)
-          const canvasX = centerX + pt.x * scale
-          const canvasY = centerY - pt.y * scale
-          points.push({ x: canvasX, y: canvasY })
-        }
-      } else if (selectedFunc.type === 'polar' && selectedFunc.polarFunc) {
-        const scale = Math.min(width, height) * 0.22
-        for (let i = 0; i <= numSteps; i++) {
-          const theta = minVal + i * step
-          const r = selectedFunc.polarFunc(theta)
-          const xVal = r * Math.cos(theta)
-          const yVal = r * Math.sin(theta)
-          const canvasX = centerX + xVal * scale
-          const canvasY = centerY - yVal * scale
-          points.push({ x: canvasX, y: canvasY })
-        }
-      }
-    }
-
-    // Draw animated curve up to current progress
-    if (points.length > 1) {
-      const countToDraw = Math.floor(points.length * progress)
-
-      // Glow effect background line
-      ctx.shadowColor = '#6366f1'
-      ctx.shadowBlur = 12
-      ctx.strokeStyle = '#818cf8'
-      ctx.lineWidth = 3.5
-      ctx.beginPath()
-      ctx.moveTo(points[0].x, points[0].y)
-
-      for (let i = 1; i < countToDraw; i++) {
-        ctx.lineTo(points[i].x, points[i].y)
-      }
-      ctx.stroke()
-      ctx.shadowBlur = 0 // Reset shadow
-
-      // Draw active head glowing particle
-      if (countToDraw > 0 && countToDraw < points.length) {
-        const head = points[countToDraw - 1]
-        ctx.fillStyle = '#38bdf8'
-        ctx.shadowColor = '#38bdf8'
-        ctx.shadowBlur = 16
+      // 곡선
+      const countToDraw = Math.floor(pts.length * progress)
+      if (countToDraw > 1) {
         ctx.beginPath()
-        ctx.arc(head.x, head.y, 6, 0, 2 * Math.PI)
-        ctx.fill()
-        ctx.shadowBlur = 0
+        ctx.strokeStyle = clr
+        ctx.lineWidth = 2.5
+        ctx.lineJoin = 'round'
+        ctx.lineCap = 'round'
+        ctx.moveTo(scaleX(pts[0].x), scaleY(pts[0].y))
+        for (let i = 1; i < countToDraw; i++) {
+          ctx.lineTo(scaleX(pts[i].x), scaleY(pts[i].y))
+        }
+        ctx.stroke()
       }
-    }
-  }, [selectedFunc, customExpr, isCustomMode, progress])
 
-  // Animation frame loop
-  useEffect(() => {
-    if (!isPlaying) return
-
-    let start: number | null = null
-    const duration = 1500 // 1.5s animation
-
-    const animate = (timestamp: number) => {
-      if (!start) start = timestamp
-      const elapsed = timestamp - start
-      const nextProgress = Math.min(1.0, elapsed / duration)
-      setProgress(nextProgress)
-
-      if (nextProgress < 1.0) {
-        animationRef.current = requestAnimationFrame(animate)
-      } else {
-        setIsPlaying(false)
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(animate)
       }
     }
 
-    animationRef.current = requestAnimationFrame(animate)
+    rafRef.current = requestAnimationFrame(animate)
+  }, [])
 
-    return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current)
+  // 랜덤 선택 및 그리기
+  const handleRandom = () => {
+    let idx = Math.floor(Math.random() * PRESETS.length)
+    // 같은 것 연속 방지
+    if (current && PRESETS[idx].name === current.name) {
+      idx = (idx + 1) % PRESETS.length
     }
-  }, [isPlaying])
-
-  const handleCustomSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!customExpr.trim()) return
-
-    try {
-      evaluate(customExpr, { x: 1 })
-      setCustomError('')
-      setIsCustomMode(true)
-      triggerAnimation()
-    } catch (err) {
-      setCustomError('수식이 올바르지 않습니다. (예: sin(x) * x, x^2 - 4)')
-    }
+    colorIdx.current = (colorIdx.current + 1) % COLORS.length
+    const clr = COLORS[colorIdx.current]
+    const fn = PRESETS[idx]
+    setCurrent(fn)
+    setColor(clr)
+    draw(fn, clr)
   }
 
+  // 초기 그리기
+  useEffect(() => {
+    const fn = PRESETS[0]
+    setCurrent(fn)
+    setColor(COLORS[0])
+    draw(fn, COLORS[0])
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [draw])
+
   return (
-    <div className="w-full max-w-5xl bg-slate-900/90 backdrop-blur-2xl border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-indigo-950/50 space-y-6">
-      
-      {/* Header & Controls Bar */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
-        
-        {/* Title & Badge */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-              <Sparkles className="w-4 h-4 animate-spin-slow" />
-            </span>
-            <h2 className="text-xl font-bold text-white tracking-tight">
-              인터랙티브 함수 시각화 그래프
-            </h2>
+    <div className="w-full space-y-4">
+      {/* 버튼 */}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={handleRandom}
+          className="px-5 py-2.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-all active:scale-95"
+        >
+          재미있는그래프
+        </button>
+
+        {current && (
+          <div className="text-xs text-gray-400">
+            <span className="font-semibold" style={{ color }}>{current.name}</span>
+            <span className="ml-2 font-mono text-gray-400">{current.formula}</span>
           </div>
-          <p className="text-xs text-slate-400">
-            수학적 아름다움을 실시간 Canvas 애니메이션으로 관찰하세요.
-          </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <button
-            onClick={handleRandomSelect}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 active:scale-[0.98] transition-all"
-          >
-            <RefreshCw className={`w-4 h-4 ${isPlaying ? 'animate-spin' : ''}`} />
-            <span>🎲 랜덤 함수 그래프 그리기</span>
-          </button>
-
-          <button
-            onClick={() => {
-              if (isPlaying) {
-                setIsPlaying(false)
-              } else {
-                triggerAnimation()
-              }
-            }}
-            className="flex items-center justify-center p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
-            title={isPlaying ? '일시정지' : '다시 재생'}
-          >
-            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* Preset Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        <span className="text-xs font-semibold text-slate-400 shrink-0 mr-1 flex items-center gap-1">
-          <Sliders className="w-3.5 h-3.5" /> 추천 프리셋:
-        </span>
-        {MATH_PRESETS.map((item) => {
-          const isActive = !isCustomMode && selectedFunc.id === item.id
-          return (
-            <button
-              key={item.id}
-              onClick={() => {
-                setIsCustomMode(false)
-                setSelectedFunc(item)
-                setCustomError('')
-                triggerAnimation()
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium shrink-0 transition-all ${
-                isActive
-                  ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/30 font-bold'
-                  : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60'
-              }`}
-            >
-              {item.name}
-            </button>
-          )
-        })}
+      {/* 캔버스 */}
+      <div className="w-full border border-gray-100 rounded-xl overflow-hidden bg-white" style={{ height: 340 }}>
+        <canvas ref={canvasRef} className="w-full h-full block" />
       </div>
-
-      {/* Formula Info Banner */}
-      <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
-              {isCustomMode ? '커스텀 수식' : selectedFunc.type.toUpperCase()}
-            </span>
-            <span className="text-slate-600">•</span>
-            <span className="text-sm font-bold text-slate-200">
-              {isCustomMode ? '직접 입력한 함수' : selectedFunc.name}
-            </span>
-          </div>
-          <div className="text-lg font-mono font-extrabold text-cyan-300 tracking-wide">
-            {isCustomMode ? `y = ${customExpr}` : selectedFunc.formulaDisplay}
-          </div>
-          <p className="text-xs text-slate-400">
-            {isCustomMode
-              ? '사용자 정의 Cartesian 변수 x에 대한 y(x) 그래프'
-              : selectedFunc.description}
-          </p>
-        </div>
-
-        <div className="shrink-0 flex items-center gap-2 bg-slate-900 px-3 py-2 rounded-xl border border-slate-800 text-xs text-slate-300">
-          <Info className="w-4 h-4 text-indigo-400 shrink-0" />
-          <span>애니메이션 진행률: {Math.round(progress * 100)}%</span>
-        </div>
-      </div>
-
-      {/* Canvas Visualization Box */}
-      <div className="relative w-full h-[380px] sm:h-[420px] rounded-2xl overflow-hidden border border-slate-800 shadow-inner bg-slate-950">
-        <canvas
-          ref={canvasRef}
-          className="w-full h-full block cursor-crosshair"
-        />
-
-        {/* Overlay Grid Tag */}
-        <div className="absolute bottom-3 left-3 px-3 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-800 text-[11px] font-mono text-slate-400">
-          Scale: Dynamic Auto-fit
-        </div>
-      </div>
-
-      {/* Custom Formula Input Drawer */}
-      <form onSubmit={handleCustomSubmit} className="space-y-2 pt-2">
-        <label className="block text-xs font-semibold text-slate-300">
-          직접 수식 입력하기 (y = f(x))
-        </label>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={customExpr}
-            onChange={(e) => setCustomExpr(e.target.value)}
-            placeholder="예: sin(x) * x, x^3 - 4*x, e^(-0.2*x) * cos(2*x)"
-            className="flex-1 px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
-          />
-          <button
-            type="submit"
-            className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs border border-slate-700 transition-all shrink-0 flex items-center gap-1.5"
-          >
-            <CheckCircle2 className="w-4 h-4 text-indigo-400" />
-            <span>적용 및 그리기</span>
-          </button>
-        </div>
-        {customError && <p className="text-xs text-red-400 font-medium">{customError}</p>}
-      </form>
-
     </div>
   )
 }
