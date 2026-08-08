@@ -19,7 +19,7 @@ interface MathFn {
 const PRESETS: MathFn[] = [
   {
     name: '하트 곡선',
-    formula: 'x(t)=16sin³t, y(t)=13cost−5cos2t−2cos3t−cos4t',
+    formula: 'x(t) = 16sin³t,  y(t) = 13cost − 5cos2t − 2cos3t − cos4t',
     type: 'parametric',
     domain: [0, 2 * Math.PI],
     parametric: (t) => ({
@@ -35,22 +35,22 @@ const PRESETS: MathFn[] = [
     polar: (theta) => Math.cos(4 * theta),
   },
   {
-    name: '감쇠 사인파',
-    formula: 'y = e^(−0.15x) · sin(3x)',
+    name: '감쇠 사인파 (지수 감쇠)',
+    formula: 'y = e⁻⁰ˑ¹⁵ˣ · sin(3x)',
     type: 'cartesian',
     domain: [-1, 4 * Math.PI],
     cartesian: (x) => Math.exp(-0.15 * x) * Math.sin(3 * x),
   },
   {
-    name: '리사주 3:4',
-    formula: 'x(t)=sin3t, y(t)=sin4t',
+    name: '리사주 곡선 (3:4)',
+    formula: 'x(t) = sin(3t),  y(t) = sin(4t)',
     type: 'parametric',
     domain: [0, 2 * Math.PI],
     parametric: (t) => ({ x: Math.sin(3 * t), y: Math.sin(4 * t) }),
   },
   {
-    name: '나비 곡선',
-    formula: 'r = e^sinθ − 2cos4θ + sin⁵((2θ−π)/24)',
+    name: '나비 곡선 (Butterfly Curve)',
+    formula: 'r = eˢⁱⁿᵗ − 2cos(4t) + sin⁵((2t−π)/24)',
     type: 'polar',
     domain: [0, 12 * Math.PI],
     polar: (theta) =>
@@ -66,24 +66,73 @@ const PRESETS: MathFn[] = [
     cartesian: (x) => x * x * x - 3 * x,
   },
   {
-    name: '진동 증폭',
-    formula: 'y = sin(x) · x',
+    name: '진동 증폭 파동',
+    formula: 'y = x · sin(x)',
     type: 'cartesian',
     domain: [-4 * Math.PI, 4 * Math.PI],
     cartesian: (x) => Math.sin(x) * x,
   },
   {
-    name: '싱크 변형',
+    name: '싱크 변형 (Sinc Curve)',
     formula: 'y = sin(2x) / (1 + 0.1x²)',
     type: 'cartesian',
     domain: [-4 * Math.PI, 4 * Math.PI],
     cartesian: (x) => Math.sin(2 * x) / (1 + 0.1 * x * x),
   },
+  {
+    name: '아르키메데스 나선 (Archimedean Spiral)',
+    formula: 'r = 0.5θ',
+    type: 'polar',
+    domain: [0, 6 * Math.PI],
+    polar: (theta) => 0.5 * theta,
+  },
+  {
+    name: '가우스 정규분포 (Gaussian Bell Curve)',
+    formula: 'y = 3 · e⁻⁰ˑ⁵ˣ²',
+    type: 'cartesian',
+    domain: [-4, 4],
+    cartesian: (x) => 3 * Math.exp(-0.5 * x * x),
+  },
+  {
+    name: '베르누이 쌍엽선 (Lemniscate of Bernoulli)',
+    formula: 'r² = 4cos(2θ)',
+    type: 'polar',
+    domain: [0, 2 * Math.PI],
+    polar: (theta) => {
+      const cos2 = Math.cos(2 * theta)
+      return cos2 >= 0 ? 2 * Math.sqrt(cos2) : 0
+    },
+  },
+  {
+    name: '데카르트 엽선 (Folium of Descartes)',
+    formula: 'x(t) = 3t/(1+t³),  y(t) = 3t²/(1+t³)',
+    type: 'parametric',
+    domain: [-0.8, 4],
+    parametric: (t) => {
+      const denom = 1 + t * t * t
+      if (Math.abs(denom) < 0.01) return { x: 0, y: 0 }
+      return { x: (3 * t) / denom, y: (3 * t * t) / denom }
+    },
+  },
+  {
+    name: '카디오이드 (Cardioid)',
+    formula: 'r = 1 + cos(θ)',
+    type: 'polar',
+    domain: [0, 2 * Math.PI],
+    polar: (theta) => 1 + Math.cos(theta),
+  },
+  {
+    name: '사이클로이드 (Cycloid)',
+    formula: 'x(t) = t − sin(t),  y(t) = 1 − cos(t)',
+    type: 'parametric',
+    domain: [0, 4 * Math.PI],
+    parametric: (t) => ({ x: t - Math.sin(t), y: 1 - Math.cos(t) }),
+  },
 ]
 
 // ── 색상 팔레트 ───────────────────────────────────────────────────
 const COLORS = [
-  '#e11d48', '#7c3aed', '#0ea5e9', '#059669', '#d97706', '#db2777'
+  '#e11d48', '#7c3aed', '#0ea5e9', '#059669', '#d97706', '#db2777', '#2563eb', '#ca8a04'
 ]
 
 function computePoints(fn: MathFn): { x: number; y: number }[] {
@@ -238,19 +287,23 @@ export default function GraphWidget() {
 
   return (
     <div className="w-full space-y-4">
-      {/* 버튼 */}
-      <div className="flex items-center gap-4">
+      {/* 버튼 & 수식 헤더 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-gray-50 border border-gray-100 rounded-xl">
         <button
           onClick={handleRandom}
-          className="px-5 py-2.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-all active:scale-95"
+          className="px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:border-gray-900 hover:bg-gray-900 hover:text-white transition-all active:scale-95 shadow-sm shrink-0"
         >
-          재미있는그래프
+          🎲 다른 그래프 보기
         </button>
 
         {current && (
-          <div className="text-xs text-gray-400">
-            <span className="font-semibold" style={{ color }}>{current.name}</span>
-            <span className="ml-2 font-mono text-gray-400">{current.formula}</span>
+          <div className="flex flex-col sm:items-end">
+            <span className="text-sm font-bold" style={{ color }}>
+              {current.name}
+            </span>
+            <span className="text-base font-semibold font-mono text-gray-900 mt-0.5 tracking-wide">
+              {current.formula}
+            </span>
           </div>
         )}
       </div>

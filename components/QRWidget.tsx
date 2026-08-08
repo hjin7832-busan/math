@@ -13,11 +13,9 @@ export default function QRWidget() {
   if (!url) return null
 
   return (
-    <div className="inline-flex flex-col items-center gap-2">
-      <div className="p-2.5 border border-gray-100 rounded-xl bg-white shadow-sm">
-        <QRCodeSVG value={url} size={96} bgColor="#ffffff" fgColor="#111827" level="M" />
-      </div>
-      <p className="text-[11px] text-gray-400 font-mono">{url}</p>
+    <div className="inline-flex flex-col items-center gap-2 bg-white p-4 border border-gray-100 rounded-2xl shadow-sm">
+      <QRCodeSVG value={url} size={180} bgColor="#ffffff" fgColor="#111827" level="M" />
+      <p className="text-xs text-gray-400 font-mono mt-1">{url}</p>
     </div>
   )
 }
