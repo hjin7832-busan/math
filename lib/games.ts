@@ -18,34 +18,10 @@ export interface GameMeta {
 export const GAMES: GameMeta[] = [
   {
     id: 'gugudan',
-    title: '구구단 팡팡 (Speed & Blast)',
-    description: '떨어지는 풍선/버블 속 정답을 조준하거나 빠르게 주관식/키패드로 타격하세요! 연속 정답 시 Fever 타임 발동!',
+    title: '구구단 스피드 챌린지',
+    description: '45초 동안 신속하게 구구단 문제를 맞춰 콤보 점수를 획득하는 미니 게임입니다.',
     emoji: '🎯',
     status: 'active',
-    category: '기초연산',
   },
-  {
-    id: 'limit-concept',
-    title: '극한의 도전 (Limit Master)',
-    description: 'x→a로 접근할 때 좌극한·우극한·수렴값을 신속하게 판단하여 목표 점수를 달성하세요.',
-    emoji: '♾️',
-    status: 'active',
-    category: '극한',
-  },
-  {
-    id: 'derivative-quiz',
-    title: '미분계수 순발력 레이스',
-    description: 'f(x)의 특정 x값에서 미분계수 f\'(x)를 신속하게 계산하고 접선의 기울기를 구하세요.',
-    emoji: '⚡',
-    status: 'soon',
-    category: '미분',
-  },
-  {
-    id: 'integral-area',
-    title: '정적분 넓이 사냥꾼',
-    description: '그래프 아래 면적(정적분)을 직관적으로 추정하고 계산하는 챌린지입니다.',
-    emoji: '📐',
-    status: 'soon',
-    category: '적분',
-  },
+  // 추후 미적분 관련 게임(극한, 미분, 적분 등)이 완성될 때 여기에 활성화하여 추가
 ]
