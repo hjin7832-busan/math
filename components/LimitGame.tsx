@@ -1,31 +1,54 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { validateNumericName, isDuplicate, submitScore } from '@/lib/leaderboardManager'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+  validateNumericName,
+  submitScore,
+  getUserDailyPlayStatus,
+  MAX_DAILY_PLAY_COUNT,
+} from '@/lib/leaderboardManager'
+import GameLeaderboard from './GameLeaderboard'
 
 function playSound(type: 'ok' | 'ng' | 'end') {
   try {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     const ctx = new AC()
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
-    osc.connect(gain); gain.connect(ctx.destination)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
     const now = ctx.currentTime
 
     if (type === 'ok') {
-      osc.type = 'sine'; osc.frequency.setValueAtTime(587.33, now); osc.frequency.exponentialRampToValueAtTime(880, now + 0.12)
-      gain.gain.setValueAtTime(0.18, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
-      osc.start(now); osc.stop(now + 0.15)
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(587.33, now)
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.12)
+      gain.gain.setValueAtTime(0.18, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
+      osc.start(now)
+      osc.stop(now + 0.15)
     } else if (type === 'ng') {
-      osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(120, now + 0.2)
-      gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2)
-      osc.start(now); osc.stop(now + 0.2)
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(200, now)
+      osc.frequency.exponentialRampToValueAtTime(120, now + 0.2)
+      gain.gain.setValueAtTime(0.2, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2)
+      osc.start(now)
+      osc.stop(now + 0.2)
     } else {
-      osc.type = 'sine'; osc.frequency.setValueAtTime(440, now); osc.frequency.exponentialRampToValueAtTime(220, now + 0.5)
-      gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5)
-      osc.start(now); osc.stop(now + 0.5)
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(440, now)
+      osc.frequency.exponentialRampToValueAtTime(220, now + 0.5)
+      gain.gain.setValueAtTime(0.2, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5)
+      osc.start(now)
+      osc.stop(now + 0.5)
     }
-  } catch { /* Autoplay block ignore */ }
+  } catch {
+    /* Autoplay block ignore */
+  }
 }
 
 interface LimitQ {
@@ -73,8 +96,6 @@ function makeLimitQuestion(): LimitQ {
     }
   } else if (selectedType === 'zero_denom') {
     const a = Math.floor(Math.random() * 5) + 1
-    const b = Math.floor(Math.random() * 4) + 1
-    // (x^2 - a^2) / (x - a) = x + a -> as x->a, ans = 2a
     const ans = 2 * a
     return {
       expr: `f(x) = (x² - ${a * a}) / (x - ${a})`,
@@ -84,7 +105,6 @@ function makeLimitQuestion(): LimitQ {
       explanation: '약분 후 인수대입: (x-a)(x+a)/(x-a) = x+a → 2a',
     }
   } else {
-    // quadratic
     const a = Math.floor(Math.random() * 3) + 1
     const ans = a * a - 2
     return {
@@ -98,6 +118,7 @@ function makeLimitQuestion(): LimitQ {
 }
 
 const GAME_SECS = 45
+const GAME_ID = 'limit-concept'
 
 export default function LimitGame({ onDone }: { onDone?: () => void }) {
   const [name, setName] = useState('')
@@ -111,39 +132,104 @@ export default function LimitGame({ onDone }: { onDone?: () => void }) {
   const [timeLeft, setTimeLeft] = useState(GAME_SECS)
   const [currentQ, setCurrentQ] = useState<LimitQ>(makeLimitQuestion())
   const [resultMsg, setResultMsg] = useState('')
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  const [playStatus, setPlayStatus] = useState<{
+    count: number
+    remaining: number
+    maxLimit: number
+    canPlay: boolean
+    msg?: string
+  }>({
+    count: 0,
+    remaining: MAX_DAILY_PLAY_COUNT,
+    maxLimit: MAX_DAILY_PLAY_COUNT,
+    canPlay: true,
+  })
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const clearTimer = () => { if (timerRef.current) clearInterval(timerRef.current) }
+  const clearTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current)
+  }
 
-  const endGame = (finalScore: number, finalCorrect: number, finalMaxCombo: number) => {
+  const checkUserLimit = useCallback(async (inputName: string) => {
+    const v = validateNumericName(inputName)
+    if (!v.ok) {
+      setNameErr(v.msg ?? '')
+      return
+    }
+    setNameErr('')
+    const status = await getUserDailyPlayStatus(inputName, GAME_ID)
+    setPlayStatus(status)
+    if (!status.canPlay) {
+      setNameErr('오늘의 도전 횟수를 모두 소모했습니다. (1일 최대 5회)')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (name.trim().length >= 2) {
+      checkUserLimit(name)
+    }
+  }, [name, checkUserLimit])
+
+  const endGame = async (finalScore: number, finalCorrect: number, finalMaxCombo: number) => {
     clearTimer()
     playSound('end')
     setPhase('done')
-    const res = submitScore({
-      gameId: 'limit-concept',
+    const res = await submitScore({
+      gameId: GAME_ID,
       numericName: name,
       score: finalScore,
       correctCount: finalCorrect,
       maxCombo: finalMaxCombo,
     })
-    setResultMsg(res.ok ? '🎉 극한의 도전 점수가 기록되었습니다!' : (res.msg ?? ''))
+    setResultMsg(
+      res.ok
+        ? `🎉 점수가 Supabase DB에 등록되었습니다! (오늘 남은 도전: ${res.remaining ?? 0}회)`
+        : res.msg ?? '점수 등록 실패'
+    )
+    setRefreshTrigger((prev) => prev + 1)
+    if (name) {
+      const updatedStatus = await getUserDailyPlayStatus(name, GAME_ID)
+      setPlayStatus(updatedStatus)
+    }
     onDone?.()
   }
 
-  const startGame = () => {
+  const startGame = async () => {
     const v = validateNumericName(name)
-    if (!v.ok) { setNameErr(v.msg ?? ''); return }
-    if (isDuplicate(name, 'limit-concept')) { setNameErr(`[${name}]은 오늘 이미 극한 게임에 등록하셨습니다.`); return }
+    if (!v.ok) {
+      setNameErr(v.msg ?? '')
+      return
+    }
+
+    const status = await getUserDailyPlayStatus(name, GAME_ID)
+    setPlayStatus(status)
+    if (!status.canPlay) {
+      setNameErr('오늘의 도전 횟수를 모두 소모했습니다. (1일 최대 5회)')
+      return
+    }
 
     setNameErr('')
-    setScore(0); setCorrect(0); setCombo(0); setMaxCombo(0); setTimeLeft(GAME_SECS)
+    setScore(0)
+    setCorrect(0)
+    setCombo(0)
+    setMaxCombo(0)
+    setTimeLeft(GAME_SECS)
     setCurrentQ(makeLimitQuestion())
     setPhase('playing')
 
-    let sc = 0, cor = 0, cmb = 0, maxC = 0
+    let sc = 0,
+      cor = 0,
+      cmb = 0,
+      maxC = 0
     const interval = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) { clearInterval(interval); endGame(sc, cor, maxC); return 0 }
+      setTimeLeft((t) => {
+        if (t <= 1) {
+          clearInterval(interval)
+          endGame(sc, cor, maxC)
+          return 0
+        }
         return t - 1
       })
     }, 1000)
@@ -153,13 +239,13 @@ export default function LimitGame({ onDone }: { onDone?: () => void }) {
   const handleChoice = (choice: string) => {
     if (choice === currentQ.ans) {
       playSound('ok')
-      setCombo(c => {
+      setCombo((c) => {
         const nc = c + 1
-        setMaxCombo(m => Math.max(m, nc))
-        setScore(s => s + 150 + nc * 30)
+        setMaxCombo((m) => Math.max(m, nc))
+        setScore((s) => s + 150 + nc * 30)
         return nc
       })
-      setCorrect(c => c + 1)
+      setCorrect((c) => c + 1)
     } else {
       playSound('ng')
       setCombo(0)
@@ -171,39 +257,66 @@ export default function LimitGame({ onDone }: { onDone?: () => void }) {
 
   if (phase === 'idle') {
     return (
-      <div className="space-y-6 max-w-md bg-white p-6 border border-gray-100 rounded-2xl shadow-sm">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            ♾️ 극한의 도전 (Limit Master)
-          </h2>
-          <p className="text-xs text-gray-400 mt-1">
-            x가 목표값 또는 무한대로 접근할 때의 극한값을 빠르게 판단하세요!
-          </p>
+      <div className="space-y-8 max-w-lg mx-auto">
+        <div className="bg-white p-6 border border-gray-100 rounded-2xl shadow-sm space-y-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              ♾️ 극한의 도전 (Limit Master)
+            </h2>
+            <p className="text-xs text-gray-400 mt-1">
+              x가 목표값 또는 무한대로 접근할 때의 극한값을 빠르게 판단하세요!
+            </p>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-gray-500">학번 / PIN 번호</label>
+              {name.trim().length >= 2 && (
+                <span
+                  className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                    playStatus.canPlay
+                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                      : 'bg-red-50 text-red-600 border border-red-200'
+                  }`}
+                >
+                  오늘 도전: {playStatus.count} / {playStatus.maxLimit}회 (남은 횟수: {playStatus.remaining}회)
+                </span>
+              )}
+            </div>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                const cleaned = e.target.value.replace(/\D/g, '')
+                setName(cleaned)
+                setNameErr(cleaned !== e.target.value ? '숫자만 입력 가능합니다.' : '')
+              }}
+              placeholder="예: 20301"
+              maxLength={10}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-base font-mono focus:outline-none focus:border-gray-900 transition-colors"
+            />
+            {nameErr && (
+              <div className="p-2.5 bg-red-50 border border-red-100 rounded-xl text-xs font-semibold text-red-600">
+                ⚠️ {nameErr}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={startGame}
+            disabled={!name.trim() || !playStatus.canPlay}
+            className={`w-full py-3.5 text-base font-bold rounded-xl transition-all shadow-sm ${
+              !name.trim() || !playStatus.canPlay
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-gray-900 text-white hover:bg-gray-800 active:scale-[0.99]'
+            }`}
+          >
+            {!playStatus.canPlay ? '오늘의 도전 횟수를 모두 소모했습니다' : `도전 시작 (${GAME_SECS}초)`}
+          </button>
         </div>
 
-        <div className="space-y-1.5 pt-2">
-          <label className="text-xs font-semibold text-gray-500">학번 / PIN 번호</label>
-          <input
-            type="text"
-            value={name}
-            onChange={e => {
-              const cleaned = e.target.value.replace(/\D/g, '')
-              setName(cleaned)
-              setNameErr(cleaned !== e.target.value ? '숫자만 입력 가능합니다.' : '')
-            }}
-            placeholder="예: 20301"
-            maxLength={10}
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-base font-mono focus:outline-none focus:border-gray-900 transition-colors"
-          />
-          {nameErr && <p className="text-xs text-red-500">{nameErr}</p>}
-        </div>
-
-        <button
-          onClick={startGame}
-          className="w-full py-3.5 bg-gray-900 text-white text-base font-bold rounded-xl hover:bg-gray-800 active:scale-[0.99] transition-all shadow-sm"
-        >
-          도전 시작 ({GAME_SECS}초)
-        </button>
+        {/* 🏆 극한 게임 전용 독립 리더보드 */}
+        <GameLeaderboard gameId={GAME_ID} refreshTrigger={refreshTrigger} />
       </div>
     )
   }
@@ -214,7 +327,11 @@ export default function LimitGame({ onDone }: { onDone?: () => void }) {
         <div className="flex items-center justify-between bg-white px-4 py-3 border border-gray-100 rounded-xl shadow-sm">
           <span className="font-mono text-sm font-semibold text-gray-500">#{name}</span>
           <div className="flex items-center gap-4">
-            <span className={`font-mono font-extrabold text-lg ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-gray-800'}`}>
+            <span
+              className={`font-mono font-extrabold text-lg ${
+                timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-gray-800'
+              }`}
+            >
               ⏱️ {timeLeft}s
             </span>
             <span className="font-mono font-bold text-base text-indigo-600">{score}점</span>
@@ -223,7 +340,9 @@ export default function LimitGame({ onDone }: { onDone?: () => void }) {
 
         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
-            className={`h-full transition-all duration-1000 ${timeLeft <= 10 ? 'bg-red-500' : 'bg-gray-900'}`}
+            className={`h-full transition-all duration-1000 ${
+              timeLeft <= 10 ? 'bg-red-500' : 'bg-gray-900'
+            }`}
             style={{ width: `${(timeLeft / GAME_SECS) * 100}%` }}
           />
         </div>
@@ -259,39 +378,49 @@ export default function LimitGame({ onDone }: { onDone?: () => void }) {
   }
 
   return (
-    <div className="space-y-6 max-w-md bg-white p-6 border border-gray-100 rounded-2xl shadow-sm">
-      <div className="space-y-1">
-        <h2 className="text-xl font-bold text-gray-900">🎉 극한의 도전 완료!</h2>
-        <p className="text-sm font-mono text-gray-400">학번/PIN: #{name}</p>
+    <div className="space-y-8 max-w-lg mx-auto">
+      <div className="bg-white p-6 border border-gray-100 rounded-2xl shadow-sm space-y-6">
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold text-gray-900">🎉 극한의 도전 완료!</h2>
+          <p className="text-sm font-mono text-gray-400">학번/PIN: #{name}</p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="py-4 bg-gray-50 border border-gray-100 rounded-xl">
+            <div className="text-xs text-gray-400">최종 점수</div>
+            <div className="text-xl font-extrabold font-mono text-indigo-600 mt-1">{score}점</div>
+          </div>
+          <div className="py-4 bg-gray-50 border border-gray-100 rounded-xl">
+            <div className="text-xs text-gray-400 font-medium">정답 개수</div>
+            <div className="text-xl font-bold font-mono text-gray-900 mt-1">{correct}개</div>
+          </div>
+          <div className="py-4 bg-gray-50 border border-gray-100 rounded-xl">
+            <div className="text-xs text-gray-400 font-medium">최대 콤보</div>
+            <div className="text-xl font-bold font-mono text-orange-500 mt-1">{maxCombo}×</div>
+          </div>
+        </div>
+
+        {resultMsg && (
+          <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-semibold text-emerald-700">
+            {resultMsg}
+          </div>
+        )}
+
+        <button
+          onClick={() => {
+            clearTimer()
+            setPhase('idle')
+            setNameErr('')
+            setResultMsg('')
+            setRefreshTrigger((prev) => prev + 1)
+          }}
+          className="w-full py-3 bg-gray-900 text-white font-semibold text-sm rounded-xl hover:bg-gray-800 transition-colors"
+        >
+          다시 플레이하기
+        </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 text-center">
-        <div className="py-4 bg-gray-50 border border-gray-100 rounded-xl">
-          <div className="text-xs text-gray-400">최종 점수</div>
-          <div className="text-xl font-extrabold font-mono text-indigo-600 mt-1">{score}점</div>
-        </div>
-        <div className="py-4 bg-gray-50 border border-gray-100 rounded-xl">
-          <div className="text-xs text-gray-400 font-medium">정답 개수</div>
-          <div className="text-xl font-bold font-mono text-gray-900 mt-1">{correct}개</div>
-        </div>
-        <div className="py-4 bg-gray-50 border border-gray-100 rounded-xl">
-          <div className="text-xs text-gray-400 font-medium">최대 콤보</div>
-          <div className="text-xl font-bold font-mono text-orange-500 mt-1">{maxCombo}×</div>
-        </div>
-      </div>
-
-      {resultMsg && (
-        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-semibold text-emerald-700">
-          {resultMsg}
-        </div>
-      )}
-
-      <button
-        onClick={() => { clearTimer(); setPhase('idle'); setNameErr('') }}
-        className="w-full py-3 bg-gray-900 text-white font-semibold text-sm rounded-xl hover:bg-gray-800 transition-colors"
-      >
-        다시 플레이하기
-      </button>
+      <GameLeaderboard gameId={GAME_ID} refreshTrigger={refreshTrigger} />
     </div>
   )
 }

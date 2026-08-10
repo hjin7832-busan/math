@@ -1,139 +1,128 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import GugudanGame from '@/components/GugudanGame'
-import {
-  getTodayLeaderboard,
-  getHallOfFame,
-  todayStr,
-  LeaderboardEntry,
-  HallOfFameEntry,
-} from '@/lib/leaderboardManager'
+import { GAMES } from '@/lib/games'
 
-type Tab = 'game' | 'today' | 'hof'
+// ─────────────────────────────────────────────────────────────────
+// 2026미적분1 페이지
+//
+// 구조: 게임 목록 → 게임 선택 → 게임 컴포넌트 (기록 포함)
+// 각 게임 컴포넌트가 자체적으로 오늘 순위 + 명예의 전당을 표시
+// 추후 게임 추가 시: GAMES 배열에 항목 추가 + 컴포넌트 import + renderGame 분기 추가
+// ─────────────────────────────────────────────────────────────────
 
 export default function Calculus2026() {
-  const [tab, setTab] = useState<Tab>('game')
-  const [todayList, setTodayList] = useState<LeaderboardEntry[]>([])
-  const [hofList, setHofList] = useState<HallOfFameEntry[]>([])
+  const [activeGameId, setActiveGameId] = useState<string | null>(null)
 
-  const refresh = () => {
-    setTodayList(getTodayLeaderboard('gugudan'))
-    setHofList(getHallOfFame('gugudan'))
+  const activeGames = GAMES.filter(g => g.status === 'active')
+  const soonGames = GAMES.filter(g => g.status === 'soon')
+
+  // ── 게임 컴포넌트 분기 렌더링 ─────────────────────────────────
+  // 추후 게임 추가 시 여기에 case 추가
+  const renderGame = (gameId: string) => {
+    switch (gameId) {
+      case 'gugudan':
+        return <GugudanGame />
+      // case 'limit-concept':
+      //   return <LimitGame />
+      // case 'derivative-quiz':
+      //   return <DerivativeGame />
+      default:
+        return <p className="text-sm text-gray-400">해당 게임을 찾을 수 없습니다.</p>
+    }
   }
-
-  useEffect(() => {
-    refresh()
-  }, [])
 
   return (
     <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full px-6 py-12 space-y-8">
 
       {/* 페이지 타이틀 */}
       <div>
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">2026 미적분1 미니 게임</h1>
+        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">2026 미적분1</h1>
         <p className="text-sm text-gray-400 mt-1">
-          수업 내용과 연결되는 신속한 수학 연산 챌린지에 도전하고 순위를 기록하세요!
+          수업과 연계된 미니 게임을 플레이하고 기록에 도전하세요!
         </p>
       </div>
 
-      {/* 탭 */}
-      <div className="flex gap-1 border-b border-gray-100">
-        {([
-          { key: 'game',  label: '🎮 미니 게임' },
-          { key: 'today', label: '🏆 오늘의 순위' },
-          { key: 'hof',   label: '🏛️ 명예의 전당' },
-        ] as { key: Tab; label: string }[]).map(it => (
+      {/* ── 게임 선택 중 ──────────────────────────────────────────── */}
+      {!activeGameId && (
+        <div className="space-y-8">
+
+          {/* 플레이 가능한 게임 */}
+          {activeGames.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">🎮 플레이 가능</p>
+              <div className="grid gap-3">
+                {activeGames.map(game => (
+                  <button
+                    key={game.id}
+                    onClick={() => setActiveGameId(game.id)}
+                    className="w-full text-left flex items-center justify-between p-5 border border-gray-200 bg-white rounded-2xl hover:border-gray-900 hover:shadow-md active:scale-[0.99] transition-all group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-indigo-50 text-2xl shrink-0 group-hover:scale-110 transition-transform">
+                        {game.emoji}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-base font-bold text-gray-900">{game.title}</p>
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">{game.description}</p>
+                      </div>
+                    </div>
+                    <div className="shrink-0 pl-3">
+                      <span className="px-4 py-2 bg-gray-900 text-white text-xs font-bold rounded-xl group-hover:bg-indigo-600 transition-colors">
+                        도전하기
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 준비 중 게임 */}
+          {soonGames.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">⏳ 준비 중</p>
+              <div className="grid gap-3">
+                {soonGames.map(game => (
+                  <div
+                    key={game.id}
+                    className="flex items-center gap-4 p-4 border border-gray-100 bg-gray-50/50 rounded-2xl opacity-60 cursor-not-allowed"
+                  >
+                    <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 text-xl shrink-0">
+                      {game.emoji}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-gray-600">{game.title}</p>
+                        <span className="text-[10px] font-bold text-gray-400 border border-gray-200 bg-white rounded px-1.5 py-0.5">
+                          COMING SOON
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{game.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 게임 플레이 화면 ──────────────────────────────────────── */}
+      {activeGameId && (
+        <div className="space-y-6">
           <button
-            key={it.key}
-            onClick={() => {
-              setTab(it.key)
-              refresh()
-            }}
-            className={`px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
-              tab === it.key
-                ? 'border-gray-900 text-gray-900'
-                : 'border-transparent text-gray-400 hover:text-gray-700'
-            }`}
+            onClick={() => setActiveGameId(null)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors px-3 py-1.5 rounded-lg border border-gray-200 bg-white"
           >
-            {it.label}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            게임 목록으로
           </button>
-        ))}
-      </div>
 
-      {/* ── 1. 게임 플레이 탭 ────────────────────────────────────── */}
-      {tab === 'game' && (
-        <div className="w-full">
-          <GugudanGame onDone={refresh} />
-        </div>
-      )}
-
-      {/* ── 2. 오늘의 순위 탭 ────────────────────────────────────── */}
-      {tab === 'today' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-400">📅 {todayStr()} (매일 자정 자동 초기화)</span>
-            <button onClick={refresh} className="text-xs font-semibold text-gray-500 hover:text-gray-900">
-              🔄 새로고침
-            </button>
-          </div>
-
-          {todayList.length === 0 ? (
-            <div className="py-12 text-center border border-dashed border-gray-200 rounded-2xl">
-              <p className="text-sm text-gray-400">아직 오늘의 기록이 없습니다. 지금 첫 번째로 등록해보세요!</p>
-            </div>
-          ) : (
-            <div className="border border-gray-100 bg-white rounded-2xl divide-y divide-gray-50 shadow-sm overflow-hidden">
-              {todayList.map((e, i) => (
-                <div key={e.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <span className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-extrabold ${
-                      i === 0 ? 'bg-amber-100 text-amber-700' :
-                      i === 1 ? 'bg-slate-100 text-slate-700' :
-                      i === 2 ? 'bg-orange-100 text-orange-700' :
-                      'bg-gray-50 text-gray-400'
-                    }`}>
-                      {i + 1}
-                    </span>
-                    <span className="font-mono text-sm font-bold text-gray-900">#{e.numericName}</span>
-                  </div>
-
-                  <div className="flex items-center gap-6 text-sm font-mono">
-                    <span className="text-indigo-600 font-extrabold text-base">{e.score}점</span>
-                    <span className="text-xs text-gray-400">{e.correctCount}개 정답 ({e.maxCombo}×콤보)</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── 3. 명예의 전당 탭 ────────────────────────────────────── */}
-      {tab === 'hof' && (
-        <div className="space-y-6">
-          <p className="text-xs text-gray-400 leading-relaxed">
-            👑 매일 자정 1위 챔피언 기록이 보존되며, 7일 동안 유지된 후 일주일 단위로 자동 업데이트됩니다.
-          </p>
-
-          {hofList.length === 0 ? (
-            <div className="py-12 text-center border border-dashed border-gray-200 rounded-2xl">
-              <p className="text-sm text-gray-400">아직 명예의 전당에 등록된 챔피언 기록이 없습니다.</p>
-            </div>
-          ) : (
-            <div className="border border-gray-100 bg-white rounded-2xl divide-y divide-gray-50 shadow-sm overflow-hidden">
-              {hofList.map(e => (
-                <div key={e.id} className="flex items-center justify-between px-5 py-4">
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded-md">{e.date}</span>
-                    <span className="font-mono text-sm font-bold text-gray-900">#{e.numericName}</span>
-                  </div>
-
-                  <span className="font-mono text-base font-extrabold text-amber-600">{e.score}점</span>
-                </div>
-              ))}
-            </div>
-          )}
+          {renderGame(activeGameId)}
         </div>
       )}
 

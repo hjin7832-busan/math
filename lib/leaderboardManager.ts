@@ -1,15 +1,19 @@
 // ─────────────────────────────────────────────────────────────────
-// Leaderboard Manager — 수학공부HYO
+// Leaderboard Manager — Supabase DB 연동 버전
 //
 // 규칙:
-//  · 게임별 / 날짜별 기록 보존
-//  · 오늘 리더보드: 당일 게임 기록 (매일 자정 리셋)
-//  · 명예의 전당  : 매일 자정 각 게임별 1등 → HOF 등재 (7일 후 자동 삭제)
+//  · Supabase `game_scores` 테이블 연동 (실시간 스코어 기록 및 랭킹)
+//  · 게임별 / 날짜별 독자 기록 관리
+//  · 오늘 리더보드: 당일 게임 기록 (점수 내림차순)
+//  · 명예의 전당  : 지난 7일간 각 게임별 일자별 1등 등재
+//  · DB 용량 관리를 위한 유저별 일일 플레이 횟수 제한 (최대 5회)
 // ─────────────────────────────────────────────────────────────────
+
+import { supabase } from './supabase'
 
 export interface LeaderboardEntry {
   id: string
-  gameId: string      // 예: 'gugudan', 'limit-concept'
+  gameId: string
   numericName: string
   score: number
   correctCount: number
@@ -26,162 +30,213 @@ export interface HallOfFameEntry {
   score: number
   correctCount: number
   maxCombo: number
-  savedAt: string     // ISO string — HOF 등재 시각 (7일 만료 기준)
+  savedAt: string     // ISO string
 }
 
-const KEY = {
-  TODAY: 'hyo_today_v3',
-  HOF:   'hyo_hof_v3',
-  LAST:  'hyo_last_date_v3',
-}
+export const MAX_DAILY_PLAY_COUNT = 5
 
-const HOF_MAX_DAYS = 7 // 주간 리셋: 7일 이후 HOF 레코드 삭제
-
-// ── 유틸 ──────────────────────────────────────────────────────────
+// ── 날짜 유틸 ──────────────────────────────────────────────────────
 export function todayStr(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function readJSON<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : fallback
-  } catch {
-    return fallback
-  }
-}
-
-function writeJSON<T>(key: string, val: T): void {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(key, JSON.stringify(val))
-}
-
-// ── 숫자 이름 검증 ────────────────────────────────────────────────
+// ── 학번/PIN 번호 검증 ─────────────────────────────────────────────
 export function validateNumericName(input: string): { ok: boolean; msg?: string } {
   const s = input.trim()
-  if (!s) return { ok: false, msg: '숫자 이름을 입력해 주세요.' }
+  if (!s) return { ok: false, msg: '학번/PIN 번호를 입력해 주세요.' }
   if (!/^\d+$/.test(s)) return { ok: false, msg: '숫자만 입력할 수 있습니다. (예: 20301)' }
   if (s.length < 2 || s.length > 10) return { ok: false, msg: '2~10자리 숫자로 입력해 주세요.' }
   return { ok: true }
 }
 
-// ── 자정 리셋 (호출할 때마다 자동 검사) ──────────────────────────
-export function checkMidnightReset(): void {
-  if (typeof window === 'undefined') return
-  const today = todayStr()
-  const last = localStorage.getItem(KEY.LAST)
-
-  if (!last) {
-    if (!localStorage.getItem(KEY.TODAY)) writeJSON(KEY.TODAY, [])
-    localStorage.setItem(KEY.LAST, today)
-    return
+// ── 유저의 당일 플레이/등록 횟수 조회 ──────────────────────────────
+export async function getUserDailyPlayStatus(
+  numericName: string,
+  gameId: string
+): Promise<{ count: number; remaining: number; maxLimit: number; canPlay: boolean; msg?: string }> {
+  const trimmed = numericName.trim()
+  if (!trimmed) {
+    return { count: 0, remaining: MAX_DAILY_PLAY_COUNT, maxLimit: MAX_DAILY_PLAY_COUNT, canPlay: true }
   }
 
-  if (last !== today) {
-    // 전날 기록 중 게임별 1등 → HOF 등재
-    const todayList = readJSON<LeaderboardEntry[]>(KEY.TODAY, [])
-    if (todayList.length > 0) {
-      const hof = readJSON<HallOfFameEntry[]>(KEY.HOF, [])
+  try {
+    const today = todayStr()
+    const { count, error } = await supabase
+      .from('game_scores')
+      .select('*', { count: 'exact', head: true })
+      .eq('numeric_name', trimmed)
+      .eq('game_id', gameId)
+      .eq('play_date', today)
 
-      // 주간 만료 레코드 제거 (7일 초과)
-      const cutoff = Date.now() - HOF_MAX_DAYS * 24 * 60 * 60 * 1000
-      const fresh = hof.filter(h => new Date(h.savedAt).getTime() > cutoff)
-
-      // 게임별 분류 후 각 1위 추출
-      const gameGroups = new Map<string, LeaderboardEntry[]>()
-      for (const entry of todayList) {
-        const gId = entry.gameId || 'gugudan'
-        if (!gameGroups.has(gId)) gameGroups.set(gId, [])
-        gameGroups.get(gId)!.push(entry)
-      }
-
-      gameGroups.forEach((entries, gId) => {
-        entries.sort((a, b) => b.score - a.score)
-        const winner = entries[0]
-        const alreadyExists = fresh.some(h => h.date === last && (h.gameId || 'gugudan') === gId)
-        if (!alreadyExists) {
-          fresh.unshift({
-            id: winner.id,
-            gameId: gId,
-            date: last,
-            numericName: winner.numericName,
-            score: winner.score,
-            correctCount: winner.correctCount,
-            maxCombo: winner.maxCombo,
-            savedAt: new Date().toISOString(),
-          })
-        }
-      })
-
-      writeJSON(KEY.HOF, fresh)
+    if (error) {
+      console.error('Supabase query error (play count):', error)
+      return { count: 0, remaining: MAX_DAILY_PLAY_COUNT, maxLimit: MAX_DAILY_PLAY_COUNT, canPlay: true }
     }
 
-    // 오늘 리더보드 리셋
-    writeJSON(KEY.TODAY, [])
-    localStorage.setItem(KEY.LAST, today)
+    const currentCount = count ?? 0
+    const remaining = Math.max(0, MAX_DAILY_PLAY_COUNT - currentCount)
+    const canPlay = currentCount < MAX_DAILY_PLAY_COUNT
+
+    return {
+      count: currentCount,
+      remaining,
+      maxLimit: MAX_DAILY_PLAY_COUNT,
+      canPlay,
+      msg: !canPlay ? '오늘의 도전 횟수를 모두 소모했습니다. (일일 최대 5회)' : undefined,
+    }
+  } catch (err) {
+    console.error('Failed to fetch play count from Supabase:', err)
+    return { count: 0, remaining: MAX_DAILY_PLAY_COUNT, maxLimit: MAX_DAILY_PLAY_COUNT, canPlay: true }
   }
 }
 
-// ── 게임별 오늘 중복 확인 ──────────────────────────────────────────
-export function isDuplicate(numericName: string, gameId: string = 'gugudan'): boolean {
-  checkMidnightReset()
-  const list = readJSON<LeaderboardEntry[]>(KEY.TODAY, [])
-  return list.some(e => e.numericName === numericName.trim() && (e.gameId || 'gugudan') === gameId)
+// ── 오늘의 게임별 리더보드 (Supabase 조회) ───────────────────────
+export async function getTodayLeaderboard(gameId: string): Promise<LeaderboardEntry[]> {
+  try {
+    const today = todayStr()
+    const { data, error } = await supabase
+      .from('game_scores')
+      .select('*')
+      .eq('game_id', gameId)
+      .eq('play_date', today)
+      .order('score', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(50)
+
+    if (error || !data) {
+      console.error('Error fetching today leaderboard:', error)
+      return []
+    }
+
+    return data.map((item: {
+      id: string
+      game_id: string
+      numeric_name: string
+      score: number
+      correct_count: number
+      max_combo: number
+      play_date: string
+      created_at: string
+    }) => ({
+      id: item.id,
+      gameId: item.game_id,
+      numericName: item.numeric_name,
+      score: item.score,
+      correctCount: item.correct_count,
+      maxCombo: item.max_combo,
+      date: item.play_date,
+      createdAt: item.created_at,
+    }))
+  } catch (err) {
+    console.error('Failed to fetch today leaderboard:', err)
+    return []
+  }
 }
 
-// ── 오늘 리더보드 (게임별 필터링 옵션) ───────────────────────────
-export function getTodayLeaderboard(gameId?: string): LeaderboardEntry[] {
-  checkMidnightReset()
-  const list = readJSON<LeaderboardEntry[]>(KEY.TODAY, [])
-  const filtered = gameId ? list.filter(e => (e.gameId || 'gugudan') === gameId) : list
-  return [...filtered].sort((a, b) => b.score - a.score)
+// ── 게임별 명예의 전당 (지난 7일 일자별 1위 Supabase 집계) ───────
+export async function getHallOfFame(gameId: string): Promise<HallOfFameEntry[]> {
+  try {
+    const today = todayStr()
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    const startDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+    const { data, error } = await supabase
+      .from('game_scores')
+      .select('*')
+      .eq('game_id', gameId)
+      .lt('play_date', today)
+      .gte('play_date', startDate)
+      .order('play_date', { ascending: false })
+      .order('score', { ascending: false })
+
+    if (error || !data) {
+      console.error('Error fetching hall of fame:', error)
+      return []
+    }
+
+    const hofMap = new Map<string, HallOfFameEntry>()
+    for (const item of data) {
+      if (!hofMap.has(item.play_date)) {
+        hofMap.set(item.play_date, {
+          id: item.id,
+          gameId: item.game_id,
+          date: item.play_date,
+          numericName: item.numeric_name,
+          score: item.score,
+          correctCount: item.correct_count,
+          maxCombo: item.max_combo,
+          savedAt: item.created_at,
+        })
+      }
+    }
+
+    return Array.from(hofMap.values()).sort((a, b) => b.date.localeCompare(a.date))
+  } catch (err) {
+    console.error('Failed to fetch hall of fame:', err)
+    return []
+  }
 }
 
-// ── 명예의 전당 (HOF, 게임별 필터링 옵션) ─────────────────────────
-export function getHallOfFame(gameId?: string): HallOfFameEntry[] {
-  checkMidnightReset()
-  const hof = readJSON<HallOfFameEntry[]>(KEY.HOF, [])
-  const cutoff = Date.now() - HOF_MAX_DAYS * 24 * 60 * 60 * 1000
-  const valid = hof.filter(h => new Date(h.savedAt).getTime() > cutoff)
-  const filtered = gameId ? valid.filter(h => (h.gameId || 'gugudan') === gameId) : valid
-  return [...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-}
-
-// ── 점수 등록 ─────────────────────────────────────────────────────
-export function submitScore(payload: {
-  gameId?: string
+// ── 점수 등록 (Supabase DB 저장) ─────────────────────────────────
+export async function submitScore(payload: {
+  gameId: string
   numericName: string
   score: number
   correctCount: number
   maxCombo: number
-}): { ok: boolean; msg?: string; entry?: LeaderboardEntry } {
-  if (typeof window === 'undefined') return { ok: false, msg: '서버 환경에서는 사용할 수 없습니다.' }
-  checkMidnightReset()
-
+}): Promise<{ ok: boolean; msg?: string; entry?: LeaderboardEntry; remaining?: number }> {
   const gId = payload.gameId || 'gugudan'
   const v = validateNumericName(payload.numericName)
   if (!v.ok) return { ok: false, msg: v.msg }
 
-  if (isDuplicate(payload.numericName, gId)) {
-    return { ok: false, msg: `[${payload.numericName}]은 오늘 이미 이 게임에 등록된 번호입니다.` }
+  const trimmedName = payload.numericName.trim()
+
+  // 1. 일일 횟수 제한 검증
+  const status = await getUserDailyPlayStatus(trimmedName, gId)
+  if (!status.canPlay) {
+    return { ok: false, msg: '오늘의 도전 횟수를 모두 소모했습니다. (일일 최대 5회)' }
   }
 
-  const entry: LeaderboardEntry = {
-    id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    gameId: gId,
-    numericName: payload.numericName.trim(),
-    score: payload.score,
-    correctCount: payload.correctCount,
-    maxCombo: payload.maxCombo,
-    date: todayStr(),
-    createdAt: new Date().toISOString(),
+  const today = todayStr()
+
+  try {
+    const { data, error } = await supabase
+      .from('game_scores')
+      .insert([
+        {
+          game_id: gId,
+          numeric_name: trimmedName,
+          score: payload.score,
+          correct_count: payload.correctCount,
+          max_combo: payload.maxCombo,
+          play_date: today,
+        },
+      ])
+      .select()
+      .single()
+
+    if (error || !data) {
+      console.error('Supabase score insert error:', error)
+      return { ok: false, msg: '점수 등록 중 오류가 발생했습니다. 다시 시도해 주세요.' }
+    }
+
+    const entry: LeaderboardEntry = {
+      id: data.id,
+      gameId: data.game_id,
+      numericName: data.numeric_name,
+      score: data.score,
+      correctCount: data.correct_count,
+      maxCombo: data.max_combo,
+      date: data.play_date,
+      createdAt: data.created_at,
+    }
+
+    const remaining = Math.max(0, MAX_DAILY_PLAY_COUNT - (status.count + 1))
+    return { ok: true, entry, remaining }
+  } catch (err) {
+    console.error('Failed to submit score:', err)
+    return { ok: false, msg: '데이터베이스 연동에 실패했습니다. 네트워크 상태를 확인해 주세요.' }
   }
-
-  const list = readJSON<LeaderboardEntry[]>(KEY.TODAY, [])
-  list.push(entry)
-  writeJSON(KEY.TODAY, list)
-
-  return { ok: true, entry }
 }
