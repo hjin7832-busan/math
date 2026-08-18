@@ -123,7 +123,7 @@ export default function GugudanGame({ onDone }: { onDone?: () => void }) {
     const status = await getUserDailyPlayStatus(inputName, GAME_ID)
     setPlayStatus(status)
     if (!status.canPlay) {
-      setNameErr('오늘의 도전 횟수를 모두 소모했습니다. (1일 최대 5회)')
+      setNameErr(status.msg ?? '도전을 시작할 수 없습니다.')
     }
   }, [])
 
@@ -182,7 +182,7 @@ export default function GugudanGame({ onDone }: { onDone?: () => void }) {
     const status = await getUserDailyPlayStatus(name, GAME_ID)
     setPlayStatus(status)
     if (!status.canPlay) {
-      setNameErr('오늘의 도전 횟수를 모두 소모했습니다. (1일 최대 5회)')
+      setNameErr(status.msg ?? '도전을 시작할 수 없습니다.')
       return
     }
 
@@ -316,7 +316,7 @@ export default function GugudanGame({ onDone }: { onDone?: () => void }) {
                 : 'bg-gray-900 text-white hover:bg-gray-800 active:scale-[0.99]'
             }`}
           >
-            {!playStatus.canPlay ? '오늘의 도전 횟수를 모두 소모했습니다' : `게임 시작하기 (${GAME_SECS}초)`}
+            {!playStatus.canPlay ? (playStatus.msg || '도전을 시작할 수 없습니다') : `게임 시작하기 (${GAME_SECS}초)`}
           </button>
         </div>
 

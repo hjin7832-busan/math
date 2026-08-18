@@ -6,7 +6,7 @@
 //  · 게임별 / 날짜별 독자 기록 관리
 //  · 오늘 리더보드: 당일 게임 기록 (점수 내림차순)
 //  · 명예의 전당  : 지난 7일간 각 게임별 일자별 1등 등재
-//  · DB 용량 관리를 위한 유저별 일일 플레이 횟수 제한 (최대 5회)
+//  · DB 용량 관리를 위한 유저별 일일 플레이 횟수 제한 (최대 3회)
 // ─────────────────────────────────────────────────────────────────
 
 import { supabase } from './supabase'
@@ -33,7 +33,7 @@ export interface HallOfFameEntry {
   savedAt: string     // ISO string
 }
 
-export const MAX_DAILY_PLAY_COUNT = 5
+export const MAX_DAILY_PLAY_COUNT = 3
 
 // ── 날짜 유틸 ──────────────────────────────────────────────────────
 export function todayStr(): string {
@@ -50,7 +50,7 @@ export function validateNumericName(input: string): { ok: boolean; msg?: string 
   return { ok: true }
 }
 
-// ── 유저의 당일 플레이/등록 횟수 조회 ──────────────────────────────
+// ── 유저의 당일 플레이/등록 횟수 조회 및 순위 등록 여부 확인 ──────────────
 export async function getUserDailyPlayStatus(
   numericName: string,
   gameId: string
@@ -76,6 +76,18 @@ export async function getUserDailyPlayStatus(
 
     const currentCount = count ?? 0
     const remaining = Math.max(0, MAX_DAILY_PLAY_COUNT - currentCount)
+
+    // 순위에 이미 이름이 등록되어 있는 경우 사용 불가
+    if (currentCount > 0) {
+      return {
+        count: currentCount,
+        remaining,
+        maxLimit: MAX_DAILY_PLAY_COUNT,
+        canPlay: false,
+        msg: '이미 순위에 등록된 이름입니다. 다른 이름을 사용해 주세요.',
+      }
+    }
+
     const canPlay = currentCount < MAX_DAILY_PLAY_COUNT
 
     return {
@@ -83,7 +95,7 @@ export async function getUserDailyPlayStatus(
       remaining,
       maxLimit: MAX_DAILY_PLAY_COUNT,
       canPlay,
-      msg: !canPlay ? '오늘의 도전 횟수를 모두 소모했습니다. (일일 최대 5회)' : undefined,
+      msg: !canPlay ? `오늘의 도전 횟수를 모두 소모했습니다. (1일 최대 ${MAX_DAILY_PLAY_COUNT}회)` : undefined,
     }
   } catch (err) {
     console.error('Failed to fetch play count from Supabase:', err)
@@ -193,10 +205,10 @@ export async function submitScore(payload: {
 
   const trimmedName = payload.numericName.trim()
 
-  // 1. 일일 횟수 제한 검증
+  // 1. 일일 횟수 및 순위 중복 검증
   const status = await getUserDailyPlayStatus(trimmedName, gId)
   if (!status.canPlay) {
-    return { ok: false, msg: '오늘의 도전 횟수를 모두 소모했습니다. (일일 최대 5회)' }
+    return { ok: false, msg: status.msg ?? `오늘의 도전 횟수를 모두 소모했습니다. (1일 최대 ${MAX_DAILY_PLAY_COUNT}회)` }
   }
 
   const today = todayStr()
