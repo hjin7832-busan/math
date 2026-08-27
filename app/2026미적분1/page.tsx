@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import GugudanGame from '@/components/GugudanGame'
+import ContinuityBridgeGame from '@/components/ContinuityBridgeGame'
 import { GAMES } from '@/lib/games'
 
 // ─────────────────────────────────────────────────────────────────
@@ -24,6 +25,8 @@ export default function Calculus2026() {
     switch (gameId) {
       case 'gugudan':
         return <GugudanGame />
+      case 'bridge-of-continuity':
+        return <ContinuityBridgeGame />
       // case 'limit-concept':
       //   return <LimitGame />
       // case 'derivative-quiz':

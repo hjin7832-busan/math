@@ -23,5 +23,12 @@ export const GAMES: GameMeta[] = [
     emoji: '🎯',
     status: 'active',
   },
-  // 추후 미적분 관련 게임(극한, 미분, 적분 등)이 완성될 때 여기에 활성화하여 추가
+  {
+    id: 'bridge-of-continuity',
+    title: '연속의 다리 (Bridge of Continuity)',
+    description: '함수 그래프의 불연속점을 발견하고, 좌극한·우극한 및 함숫값을 비교하여 연속 함수를 완성하는 스피드 퀴즈!',
+    emoji: '🌉',
+    status: 'active',
+    category: '수학II - 함수의 극한과 연속',
+  },
 ]
