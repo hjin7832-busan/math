@@ -5,7 +5,7 @@ import Link from 'next/link'
 
 export default function BridgeOfContinuityPage() {
   return (
-    <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full px-6 py-12 space-y-6">
+    <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full px-4 sm:px-8 py-8 space-y-6">
       <div className="flex items-center justify-between">
         <Link
           href="/2026미적분1"
