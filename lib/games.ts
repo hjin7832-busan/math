@@ -24,11 +24,11 @@ export const GAMES: GameMeta[] = [
     status: 'active',
   },
   {
-    id: 'bridge-of-continuity',
-    title: '연속의 다리 (Bridge of Continuity)',
-    description: '함수 그래프의 불연속점을 발견하고, 좌극한·우극한 및 함숫값을 비교하여 연속 함수를 완성하는 스피드 퀴즈!',
-    emoji: '🌉',
+    id: 'limit-guardian',
+    title: '함수의 극한 마왕 대결 (Limit Guardian)',
+    description: '0/0 꼴, ∞/∞ 꼴 등 부정형 극한 문제를 신속히 풀어 마왕 몬스터를 격파하는 쾌감 RPG 미니게임!',
+    emoji: '🐉',
     status: 'active',
-    category: '수학II - 함수의 극한과 연속',
+    category: '수학II · 함수의 극한',
   },
 ]
