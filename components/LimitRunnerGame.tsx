@@ -834,26 +834,18 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
             </p>
           </div>
 
-          {/* 게임 규칙 안내 */}
-          <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3 text-xs">
+          {/* 게임 조작법 안내 */}
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2 text-xs">
             <p className="font-bold text-cyan-400 border-b border-slate-800 pb-2 flex items-center justify-between">
-              <span>🎮 조작법 & 서바이벌 규칙</span>
+              <span>🎮 점프 조작법</span>
               <span className="text-[10px] text-slate-400">제한시간 60초</span>
             </p>
-            <ul className="space-y-2 text-slate-300">
-              <li className="flex items-start gap-2">
-                <span className="bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded font-mono font-bold">Space / ↑ / 터치</span>
-                <span>가시 장애물을 점프 회피 (성공 시 "Good!", "Nice Jump!" 칭찬 팝업 출현)</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">1~4 키 / 클릭</span>
-                <span>악당 마주침 시 눈으로 푸는 극한 문제를 맞추면 "Great Job!", "Excellent!" 칭찬</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">단일 난이도</span>
-                <span>구구단 게임처럼 누구나 쉽게 즐길 수 있는 암산형 단순 극한 통합 제공</span>
-              </li>
-            </ul>
+            <div className="flex flex-wrap items-center gap-2.5 text-slate-200 py-1">
+              <span className="bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-xl font-mono font-bold border border-cyan-500/30 text-xs">
+                Space 키 / 위쪽 방향키(↑) / 화면 클릭·터치
+              </span>
+              <span className="text-slate-300 font-medium">를 눌러 장애물을 점프하세요!</span>
+            </div>
           </div>
 
           {/* 학번 / PIN 번호 입력 */}
