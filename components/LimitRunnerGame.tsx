@@ -25,8 +25,8 @@ function playAudioSound(type: 'jump' | 'crash' | 'villain' | 'shoot' | 'ng' | 'e
       osc.connect(gain)
       gain.connect(ctx.destination)
       osc.type = 'sine'
-      osc.frequency.setValueAtTime(280, now)
-      osc.frequency.exponentialRampToValueAtTime(650, now + 0.12)
+      osc.frequency.setValueAtTime(300, now)
+      osc.frequency.exponentialRampToValueAtTime(700, now + 0.12)
       gain.gain.setValueAtTime(0.2, now)
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12)
       osc.start(now)
@@ -37,12 +37,12 @@ function playAudioSound(type: 'jump' | 'crash' | 'villain' | 'shoot' | 'ng' | 'e
       osc.connect(gain)
       gain.connect(ctx.destination)
       osc.type = 'sawtooth'
-      osc.frequency.setValueAtTime(150, now)
-      osc.frequency.exponentialRampToValueAtTime(40, now + 0.25)
-      gain.gain.setValueAtTime(0.3, now)
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25)
+      osc.frequency.setValueAtTime(220, now)
+      osc.frequency.exponentialRampToValueAtTime(40, now + 0.3)
+      gain.gain.setValueAtTime(0.35, now)
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3)
       osc.start(now)
-      osc.stop(now + 0.25)
+      osc.stop(now + 0.3)
     } else if (type === 'villain') {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
@@ -147,7 +147,6 @@ function generateMentalLimitQuestion(): MentalLimitQuestion {
   const id = Math.random().toString(36).substring(2, 9)
 
   if (selectedType === 'poly_direct') {
-    // 1. 단순 일차/이차 대입 (예: lim_{x -> 2} (x + 3) = 5)
     const a = Math.floor(Math.random() * 5) - 1 // -1 ~ 3
     const b = Math.floor(Math.random() * 6) + 1  // 1 ~ 6
     const ans = a + b
@@ -168,7 +167,6 @@ function generateMentalLimitQuestion(): MentalLimitQuestion {
       explanationLatex: `\\lim_{x \\to ${a}} (x + ${b}) = ${a} + ${b} = ${ans}`,
     }
   } else if (selectedType === 'const_limit') {
-    // 2. 상수함수 극한 (예: lim_{x -> 5} 7 = 7)
     const c = Math.floor(Math.random() * 9) + 1
     const a = Math.floor(Math.random() * 4) + 1
     const ansStr = `${c}`
@@ -188,7 +186,6 @@ function generateMentalLimitQuestion(): MentalLimitQuestion {
       explanationLatex: `\\lim_{x \\to ${a}} ${c} = ${c}`,
     }
   } else if (selectedType === 'zero_simple') {
-    // 3. 아주 쉬운 0/0 꼴 (예: lim_{x -> a} (x^2 - a^2)/(x - a) = 2a)
     const a = Math.floor(Math.random() * 3) + 1 // 1, 2, 3
     const ans = 2 * a
     const ansStr = `${ans}`
@@ -208,7 +205,6 @@ function generateMentalLimitQuestion(): MentalLimitQuestion {
       explanationLatex: `\\lim_{x \\to ${a}} (x + ${a}) = ${ans}`,
     }
   } else {
-    // 4. 무한대 분수 극한 (예: lim_{x -> \infty} 1/x = 0 또는 lim_{x -> \infty} k/x = 0)
     const k = Math.floor(Math.random() * 5) + 1
     const isZero = Math.random() > 0.3
     const ansStr = isZero ? '0' : `${k}`
@@ -238,11 +234,13 @@ function generateMentalLimitQuestion(): MentalLimitQuestion {
 function RunnerCanvas({
   isJumping,
   onJumpReq,
+  onHitObstacle,
   hasVillain,
   isGameOver,
 }: {
   isJumping: boolean
   onJumpReq: () => void
+  onHitObstacle: () => void
   hasVillain: boolean
   isGameOver: boolean
 }) {
@@ -255,16 +253,21 @@ function RunnerCanvas({
   const isGroundedRef = useRef<boolean>(true)
 
   const obstacleXRef = useRef<number>(600)
+  const obstacleTypeRef = useRef<'single' | 'double' | 'tall'>('single')
   const villainXRef = useRef<number>(800)
   const scrollRef = useRef<number>(0)
+  const hasCollidedRef = useRef<boolean>(false)
 
   const onJumpReqRef = useRef(onJumpReq)
   onJumpReqRef.current = onJumpReq
 
+  const onHitObstacleRef = useRef(onHitObstacle)
+  onHitObstacleRef.current = onHitObstacle
+
   // Trigger Jump Logic
   const triggerJump = useCallback(() => {
     if (isGroundedRef.current && !isGameOver) {
-      heroVyRef.current = -12.5
+      heroVyRef.current = -13.5 // Fast responsive jump
       isGroundedRef.current = false
       onJumpReqRef.current()
     }
@@ -293,12 +296,12 @@ function RunnerCanvas({
 
     const groundY = H - 50
     const heroRadius = 18
-    const heroX = W * 0.2
+    const heroX = W * 0.22
 
     // 1. Update Physics (Gravity & Jump)
     if (!isGroundedRef.current) {
       heroYRef.current += heroVyRef.current
-      heroVyRef.current += 0.65 // Gravity
+      heroVyRef.current += 0.75 // Snappy gravity
 
       if (heroYRef.current >= 0) {
         heroYRef.current = 0
@@ -309,20 +312,26 @@ function RunnerCanvas({
 
     const currentHeroY = groundY - heroRadius + heroYRef.current
 
-    // 2. Scroll speed
-    const speed = hasVillain || isGameOver ? 0 : 6
+    // 2. Runner speed (Increased difficulty: 8px/frame)
+    const speed = hasVillain || isGameOver ? 0 : 8
     scrollRef.current += speed
 
     // Update Obstacle position
     obstacleXRef.current -= speed
-    if (obstacleXRef.current < -40) {
-      obstacleXRef.current = W + Math.random() * 200 + 150
+    if (obstacleXRef.current < -80) {
+      obstacleXRef.current = W + Math.random() * 220 + 200
+      hasCollidedRef.current = false
+      // Random obstacle type for higher difficulty!
+      const rand = Math.random()
+      if (rand < 0.4) obstacleTypeRef.current = 'single'
+      else if (rand < 0.75) obstacleTypeRef.current = 'double'
+      else obstacleTypeRef.current = 'tall'
     }
 
     // Update Villain position
     if (hasVillain) {
       if (villainXRef.current > W * 0.65) {
-        villainXRef.current -= 4
+        villainXRef.current -= 5
       }
     } else {
       villainXRef.current = W + 300
@@ -376,29 +385,61 @@ function RunnerCanvas({
     ctx.arc(heroX + 5, currentHeroY - 3, 3, 0, Math.PI * 2)
     ctx.fill()
 
-    // 5. Render Obstacle (Spike / Hurdle)
+    // 5. Render Higher-Difficulty Obstacles (Single / Double / Tall Spikes)
     const obsX = obstacleXRef.current
-    const obsW = 28
-    const obsH = 34
+    let obsW = 34
+    let obsH = 44
+
+    if (obstacleTypeRef.current === 'double') {
+      obsW = 60
+      obsH = 44
+    } else if (obstacleTypeRef.current === 'tall') {
+      obsW = 38
+      obsH = 55
+    }
+
     const obsY = groundY - obsH
 
     ctx.fillStyle = '#f43f5e'
     ctx.strokeStyle = '#ffffff'
-    ctx.lineWidth = 2
+    ctx.lineWidth = 2.5
 
-    // Spike Triangle Path
-    ctx.beginPath()
-    ctx.moveTo(obsX, groundY)
-    ctx.lineTo(obsX + obsW / 2, obsY)
-    ctx.lineTo(obsX + obsW, groundY)
-    ctx.closePath()
-    ctx.fill()
-    ctx.stroke()
+    if (obstacleTypeRef.current === 'double') {
+      // Twin Spikes
+      ctx.beginPath()
+      ctx.moveTo(obsX, groundY)
+      ctx.lineTo(obsX + 15, obsY)
+      ctx.lineTo(obsX + 30, groundY)
+      ctx.lineTo(obsX + 45, obsY)
+      ctx.lineTo(obsX + 60, groundY)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+    } else {
+      // Single / Tall Spike
+      ctx.beginPath()
+      ctx.moveTo(obsX, groundY)
+      ctx.lineTo(obsX + obsW / 2, obsY)
+      ctx.lineTo(obsX + obsW, groundY)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+    }
 
-    // Collision Detection (Circle vs Spike Triangle)
-    const distToSpikeCenter = Math.hypot(heroX - (obsX + obsW / 2), currentHeroY - (groundY - 15))
-    if (distToSpikeCenter < heroRadius + 10 && !isGameOver) {
-      // Hit obstacle! Handled in game loop
+    // 🌟 Precise Collision Detection (Hero Circle vs Obstacle Bounding Box)
+    const heroLeftX = heroX - heroRadius + 4
+    const heroRightX = heroX + heroRadius - 4
+    const heroBottomY = currentHeroY + heroRadius - 2
+
+    if (
+      heroRightX > obsX &&
+      heroLeftX < obsX + obsW &&
+      heroBottomY > obsY + 4 &&
+      !isGameOver &&
+      !hasCollidedRef.current
+    ) {
+      hasCollidedRef.current = true
+      onHitObstacleRef.current()
     }
 
     // 6. Render Villain Monster (if encountered)
@@ -417,13 +458,11 @@ function RunnerCanvas({
       ctx.stroke()
       ctx.shadowBlur = 0
 
-      // Villain Skull Horns
       ctx.fillStyle = '#e9d5ff'
       ctx.font = 'bold 24px sans-serif'
       ctx.textAlign = 'center'
       ctx.fillText('😈', vX, vY + 8)
 
-      // Warning Indicator above Villain
       ctx.fillStyle = '#f43f5e'
       ctx.font = 'bold 12px monospace'
       ctx.fillText('⚠️ 악당 출현! 수식을 풀어라!', vX, vY - 40)
@@ -449,8 +488,8 @@ function RunnerCanvas({
         <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
         <span>🏃 Jump: Space / Touch Anywhere!</span>
       </div>
-      <div className="absolute bottom-3 right-4 text-[11px] font-mono text-slate-400 bg-slate-900/90 px-3.5 py-1 rounded-full border border-slate-800 pointer-events-none">
-        장애물에 부딪히면 즉시 Game Over!
+      <div className="absolute bottom-3 right-4 text-[11px] font-mono text-rose-400 bg-slate-900/90 px-3.5 py-1 rounded-full border border-rose-900/40 pointer-events-none font-bold">
+        ⚠️ 장애물 충돌 시 즉시 Game Over!
       </div>
     </div>
   )
@@ -568,10 +607,17 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
     onDone?.()
   }, [onDone])
 
+  // ── 장애물 충돌 시 즉시 Game Over 처리 ─────────────────────────────
+  const handleHitObstacle = useCallback(() => {
+    if (phaseRef.current !== 'playing') return
+    playAudioSound('crash')
+    endGame('⚠️ 가시 장애물에 충돌하여 서바이벌 실패!')
+  }, [endGame])
+
   // ── Periodic Villain Encounter Spawner ─────────────────────────────
   const scheduleVillainEncounter = useCallback(() => {
     if (phaseRef.current !== 'playing') return
-    const delay = Math.floor(Math.random() * 3000) + 4000 // 4~7초마다 악당 인카운터
+    const delay = Math.floor(Math.random() * 3000) + 4000
     villainTimerRef.current = setTimeout(() => {
       if (phaseRef.current === 'playing') {
         playAudioSound('villain')
@@ -616,12 +662,11 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
     setCurrentQ(generateMentalLimitQuestion())
     setPhase('playing')
 
-    // 60초 타이머
     const interval = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
           clearInterval(interval)
-          setTimeout(() => endGame('⏱️ 60초 제한시간 종료!'), 0)
+          setTimeout(() => endGame('⏱️ 60초 제한시간 완료!'), 0)
           return 0
         }
         return t - 1
@@ -629,7 +674,6 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
     }, 1000)
     timerRef.current = interval
 
-    // 첫 악당 스폰 예약
     scheduleVillainEncounter()
   }
 
@@ -659,7 +703,6 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
         setCombo(newCombo)
         setMaxCombo(maxComboRef.current)
 
-        // 악당 퇴치 성공! 달리기로 복귀
         setHasVillain(false)
         setFlash(null)
         scheduleVillainEncounter()
@@ -670,7 +713,6 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
         setCombo(0)
         setWrongNotes((prev) => [...prev, { q: currentQ, userChoice: choice }])
 
-        // 오답 시 악당의 공격으로 게임 오버!
         setTimeout(() => {
           endGame('😈 악당 퀴즈에 오답을 제출하여 격파 실패!')
         }, 300)
@@ -736,8 +778,8 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
             </p>
             <ul className="space-y-2 text-slate-300">
               <li className="flex items-start gap-2">
-                <span className="bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded font-mono font-bold">Space / ↑ / 터치</span>
-                <span>가시 장애물을 점프하여 회피 (장애물에 닿으면 즉시 Game Over!)</span>
+                <span className="bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded font-mono font-bold">Space / ↑ / 터치</span>
+                <span>높아진 가시 장애물을 점프하여 회피 (장애물에 충돌하면 즉시 Game Over!)</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">1~4 키 / 클릭</span>
@@ -849,10 +891,11 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
           )}
         </div>
 
-        {/* 2D Canvas Interactive Runner Engine */}
+        {/* 2D Canvas Interactive Runner Engine (With Obstacle Collision Callback) */}
         <RunnerCanvas
           isJumping={isJumping}
           onJumpReq={() => playAudioSound('jump')}
+          onHitObstacle={handleHitObstacle}
           hasVillain={hasVillain}
           isGameOver={false}
         />
