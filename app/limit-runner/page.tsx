@@ -1,9 +1,9 @@
 'use client'
 
-import LimitGuardianGame from '@/components/LimitGuardianGame'
+import LimitRunnerGame from '@/components/LimitRunnerGame'
 import Link from 'next/link'
 
-export default function LimitGuardianPage() {
+export default function LimitRunnerPage() {
   return (
     <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full px-4 sm:px-8 py-8 space-y-6">
       <div className="flex items-center justify-between">
@@ -16,12 +16,12 @@ export default function LimitGuardianPage() {
           </svg>
           2026 미적분1 목록으로
         </Link>
-        <span className="text-xs font-bold text-rose-600 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full">
+        <span className="text-xs font-bold text-cyan-600 bg-cyan-50 border border-cyan-100 px-3 py-1 rounded-full">
           수학 II · 함수의 극한
         </span>
       </div>
 
-      <LimitGuardianGame />
+      <LimitRunnerGame />
     </div>
   )
 }

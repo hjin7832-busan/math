@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import GugudanGame from '@/components/GugudanGame'
-import LimitGuardianGame from '@/components/LimitGuardianGame'
+import LimitRunnerGame from '@/components/LimitRunnerGame'
 import { GAMES } from '@/lib/games'
 
 // ─────────────────────────────────────────────────────────────────
@@ -25,8 +25,8 @@ export default function Calculus2026() {
     switch (gameId) {
       case 'gugudan':
         return <GugudanGame />
-      case 'limit-guardian':
-        return <LimitGuardianGame />
+      case 'limit-runner':
+        return <LimitRunnerGame />
       // case 'limit-concept':
       //   return <LimitGame />
       // case 'derivative-quiz':
