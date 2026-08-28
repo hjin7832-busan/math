@@ -11,7 +11,7 @@ import {
 import GameLeaderboard from './GameLeaderboard'
 
 // ── Web Audio API Sound Synthesizer ───────────────────────────────
-function playAudioSound(type: 'jump' | 'crash' | 'villain' | 'shoot' | 'ng' | 'end') {
+function playAudioSound(type: 'jump' | 'crash' | 'villain' | 'shoot' | 'ng' | 'end' | 'praise') {
   try {
     const AC =
       window.AudioContext ||
@@ -19,7 +19,22 @@ function playAudioSound(type: 'jump' | 'crash' | 'villain' | 'shoot' | 'ng' | 'e
     const ctx = new AC()
     const now = ctx.currentTime
 
-    if (type === 'jump') {
+    if (type === 'praise') {
+      const notes = [523.25, 659.25, 783.99] // C5, E5, G5 major arpeggio
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.type = 'triangle'
+        osc.frequency.value = freq
+        const t = now + i * 0.06
+        gain.gain.setValueAtTime(0.2, t)
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18)
+        osc.start(t)
+        osc.stop(t + 0.18)
+      })
+    } else if (type === 'jump') {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.connect(gain)
@@ -121,6 +136,9 @@ export interface WrongNote {
 const GAME_SECS = 60
 const GAME_ID = 'limit-runner'
 
+const OBSTACLE_PRAISES = ['Good!', 'Nice Jump!', 'Great!', 'Awesome!', '나이스 점프!', 'Perfect!']
+const QUIZ_PRAISES = ['Great Job!', 'Excellent!', 'Brilliant!', '정답!', 'Superb!', 'Perfect Solved!']
+
 function shuffle<T>(arr: T[]): T[] {
   return [...arr].sort(() => Math.random() - 0.5)
 }
@@ -147,8 +165,8 @@ function generateMentalLimitQuestion(): MentalLimitQuestion {
   const id = Math.random().toString(36).substring(2, 9)
 
   if (selectedType === 'poly_direct') {
-    const a = Math.floor(Math.random() * 5) - 1 // -1 ~ 3
-    const b = Math.floor(Math.random() * 6) + 1  // 1 ~ 6
+    const a = Math.floor(Math.random() * 5) - 1
+    const b = Math.floor(Math.random() * 6) + 1
     const ans = a + b
     const ansStr = `${ans}`
 
@@ -186,7 +204,7 @@ function generateMentalLimitQuestion(): MentalLimitQuestion {
       explanationLatex: `\\lim_{x \\to ${a}} ${c} = ${c}`,
     }
   } else if (selectedType === 'zero_simple') {
-    const a = Math.floor(Math.random() * 3) + 1 // 1, 2, 3
+    const a = Math.floor(Math.random() * 3) + 1
     const ans = 2 * a
     const ansStr = `${ans}`
 
@@ -235,14 +253,18 @@ function RunnerCanvas({
   isJumping,
   onJumpReq,
   onHitObstacle,
+  onClearObstacle,
   hasVillain,
   isGameOver,
+  praiseText,
 }: {
   isJumping: boolean
   onJumpReq: () => void
   onHitObstacle: () => void
+  onClearObstacle: () => void
   hasVillain: boolean
   isGameOver: boolean
+  praiseText: string | null
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animRef = useRef<number | null>(null)
@@ -257,6 +279,7 @@ function RunnerCanvas({
   const villainXRef = useRef<number>(800)
   const scrollRef = useRef<number>(0)
   const hasCollidedRef = useRef<boolean>(false)
+  const hasClearedRef = useRef<boolean>(false)
 
   const onJumpReqRef = useRef(onJumpReq)
   onJumpReqRef.current = onJumpReq
@@ -264,10 +287,13 @@ function RunnerCanvas({
   const onHitObstacleRef = useRef(onHitObstacle)
   onHitObstacleRef.current = onHitObstacle
 
+  const onClearObstacleRef = useRef(onClearObstacle)
+  onClearObstacleRef.current = onClearObstacle
+
   // Trigger Jump Logic
   const triggerJump = useCallback(() => {
     if (isGroundedRef.current && !isGameOver) {
-      heroVyRef.current = -13.5 // Fast responsive jump
+      heroVyRef.current = -13.5
       isGroundedRef.current = false
       onJumpReqRef.current()
     }
@@ -301,7 +327,7 @@ function RunnerCanvas({
     // 1. Update Physics (Gravity & Jump)
     if (!isGroundedRef.current) {
       heroYRef.current += heroVyRef.current
-      heroVyRef.current += 0.75 // Snappy gravity
+      heroVyRef.current += 0.75
 
       if (heroYRef.current >= 0) {
         heroYRef.current = 0
@@ -312,7 +338,7 @@ function RunnerCanvas({
 
     const currentHeroY = groundY - heroRadius + heroYRef.current
 
-    // 2. Runner speed (Increased difficulty: 8px/frame)
+    // 2. Runner speed
     const speed = hasVillain || isGameOver ? 0 : 8
     scrollRef.current += speed
 
@@ -321,7 +347,8 @@ function RunnerCanvas({
     if (obstacleXRef.current < -80) {
       obstacleXRef.current = W + Math.random() * 220 + 200
       hasCollidedRef.current = false
-      // Random obstacle type for higher difficulty!
+      hasClearedRef.current = false
+
       const rand = Math.random()
       if (rand < 0.4) obstacleTypeRef.current = 'single'
       else if (rand < 0.75) obstacleTypeRef.current = 'double'
@@ -405,7 +432,6 @@ function RunnerCanvas({
     ctx.lineWidth = 2.5
 
     if (obstacleTypeRef.current === 'double') {
-      // Twin Spikes
       ctx.beginPath()
       ctx.moveTo(obsX, groundY)
       ctx.lineTo(obsX + 15, obsY)
@@ -416,7 +442,6 @@ function RunnerCanvas({
       ctx.fill()
       ctx.stroke()
     } else {
-      // Single / Tall Spike
       ctx.beginPath()
       ctx.moveTo(obsX, groundY)
       ctx.lineTo(obsX + obsW / 2, obsY)
@@ -426,7 +451,7 @@ function RunnerCanvas({
       ctx.stroke()
     }
 
-    // 🌟 Precise Collision Detection (Hero Circle vs Obstacle Bounding Box)
+    // Precise Collision Detection
     const heroLeftX = heroX - heroRadius + 4
     const heroRightX = heroX + heroRadius - 4
     const heroBottomY = currentHeroY + heroRadius - 2
@@ -440,6 +465,12 @@ function RunnerCanvas({
     ) {
       hasCollidedRef.current = true
       onHitObstacleRef.current()
+    }
+
+    // 🌟 Obstacle Cleared Detection (Praise trigger for successful jump)
+    if (obsX + obsW < heroLeftX && !hasClearedRef.current && !hasCollidedRef.current) {
+      hasClearedRef.current = true
+      onClearObstacleRef.current()
     }
 
     // 6. Render Villain Monster (if encountered)
@@ -484,6 +515,16 @@ function RunnerCanvas({
       className="w-full h-[320px] sm:h-[360px] rounded-3xl overflow-hidden border border-slate-800 shadow-2xl bg-slate-950 relative cursor-pointer select-none group"
     >
       <canvas ref={canvasRef} className="w-full h-full block" />
+
+      {/* 🌟 Encouraging Praise Toast Popup Banner */}
+      {praiseText && (
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-400 via-emerald-400 to-cyan-400 text-slate-950 px-6 py-2 rounded-full font-black text-xl shadow-2xl animate-bounce border-2 border-white flex items-center gap-2 pointer-events-none z-20">
+          <span>✨</span>
+          <span>{praiseText}</span>
+          <span>✨</span>
+        </div>
+      )}
+
       <div className="absolute top-3 left-4 text-xs font-mono font-bold text-cyan-400 bg-slate-900/90 px-3.5 py-1 rounded-full border border-slate-800 flex items-center gap-2">
         <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
         <span>🏃 Jump: Space / Touch Anywhere!</span>
@@ -516,6 +557,7 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
   const [hasVillain, setHasVillain] = useState(false)
   const [isJumping, setIsJumping] = useState(false)
   const [gameOverReason, setGameOverReason] = useState<string>('')
+  const [praiseText, setPraiseText] = useState<string | null>(null)
 
   const [resultMsg, setResultMsg] = useState('')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -544,11 +586,25 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const villainTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const praiseTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const clearTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current)
     if (villainTimerRef.current) clearInterval(villainTimerRef.current)
+    if (praiseTimerRef.current) clearTimeout(praiseTimerRef.current)
   }
+
+  const triggerPraise = useCallback((type: 'obstacle' | 'quiz') => {
+    const list = type === 'obstacle' ? OBSTACLE_PRAISES : QUIZ_PRAISES
+    const chosen = list[Math.floor(Math.random() * list.length)]
+    setPraiseText(chosen)
+    playAudioSound('praise')
+
+    if (praiseTimerRef.current) clearTimeout(praiseTimerRef.current)
+    praiseTimerRef.current = setTimeout(() => {
+      setPraiseText(null)
+    }, 1200)
+  }, [])
 
   const checkUserLimit = useCallback(async (inputName: string) => {
     const v = validateNumericName(inputName)
@@ -614,6 +670,12 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
     endGame('⚠️ 가시 장애물에 충돌하여 서바이벌 실패!')
   }, [endGame])
 
+  // ── 장애물 성공 점프 통과 칭찬 이벤트 ─────────────────────────────
+  const handleClearObstacle = useCallback(() => {
+    if (phaseRef.current !== 'playing') return
+    triggerPraise('obstacle')
+  }, [triggerPraise])
+
   // ── Periodic Villain Encounter Spawner ─────────────────────────────
   const scheduleVillainEncounter = useCallback(() => {
     if (phaseRef.current !== 'playing') return
@@ -644,6 +706,7 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
     setNameErr('')
     setGameOverReason('')
     setHasVillain(false)
+    setPraiseText(null)
     setScore(0)
     setCorrect(0)
     setTotalCount(0)
@@ -688,6 +751,7 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
       if (isOk) {
         playAudioSound('shoot')
         setFlash('ok')
+        triggerPraise('quiz')
 
         const basePts = 150
         const newCombo = comboRef.current + 1
@@ -718,7 +782,7 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
         }, 300)
       }
     },
-    [currentQ, hasVillain, scheduleVillainEncounter, endGame]
+    [currentQ, hasVillain, scheduleVillainEncounter, endGame, triggerPraise]
   )
 
   // ── 키보드 단축키 (Space = Jump, 1~4 = Answer Choice) ────────────────
@@ -779,11 +843,11 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
             <ul className="space-y-2 text-slate-300">
               <li className="flex items-start gap-2">
                 <span className="bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded font-mono font-bold">Space / ↑ / 터치</span>
-                <span>높아진 가시 장애물을 점프하여 회피 (장애물에 충돌하면 즉시 Game Over!)</span>
+                <span>가시 장애물을 점프 회피 (성공 시 "Good!", "Nice Jump!" 칭찬 팝업 출현)</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">1~4 키 / 클릭</span>
-                <span>악당 마주침 시 눈으로 푸는 암산용 극한 문제를 맞춰 악당 퇴치</span>
+                <span>악당 마주침 시 눈으로 푸는 극한 문제를 맞추면 "Great Job!", "Excellent!" 칭찬</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">단일 난이도</span>
@@ -891,13 +955,15 @@ export default function LimitRunnerGame({ onDone }: { onDone?: () => void }) {
           )}
         </div>
 
-        {/* 2D Canvas Interactive Runner Engine (With Obstacle Collision Callback) */}
+        {/* 2D Canvas Interactive Runner Engine (With Praise System) */}
         <RunnerCanvas
           isJumping={isJumping}
           onJumpReq={() => playAudioSound('jump')}
           onHitObstacle={handleHitObstacle}
+          onClearObstacle={handleClearObstacle}
           hasVillain={hasVillain}
           isGameOver={false}
+          praiseText={praiseText}
         />
 
         {/* 악당 출현 시 팝업 퀴즈 카드 */}
